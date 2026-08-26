@@ -1,0 +1,202 @@
+[
+	{
+		"file": "D:\\Unreal_Engine_Project_Practice\\ProjectProject01\\Source\\ProjectProject01\\Private\\BTService_WeepingAngel.cpp",
+		"arguments": [
+			"C:\\Program Files\\Microsoft Visual Studio\\2022\\Community\\VC\\Tools\\MSVC\\14.44.35207\\bin\\Hostx64\\x64\\cl.exe",
+			"@D:\\Unreal_Engine_Project_Practice\\ProjectProject01\\.vscode\\compileCommands_Default\\ProjectProject01.1.rsp"
+		],
+		"directory": "D:\\Epic Games\\UE_5.7\\Engine\\Source"
+	},
+	{
+		"file": "D:\\Unreal_Engine_Project_Practice\\ProjectProject01\\Source\\ProjectProject01\\Private\\BTService_WeepingAngelExample01.cpp",
+		"arguments": [
+			"C:\\Program Files\\Microsoft Visual Studio\\2022\\Community\\VC\\Tools\\MSVC\\14.44.35207\\bin\\Hostx64\\x64\\cl.exe",
+			"@D:\\Unreal_Engine_Project_Practice\\ProjectProject01\\.vscode\\compileCommands_Default\\ProjectProject01.1.rsp"
+		],
+		"directory": "D:\\Epic Games\\UE_5.7\\Engine\\Source"
+	},
+	{
+		"file": "D:\\Unreal_Engine_Project_Practice\\ProjectProject01\\Source\\ProjectProject01\\Private\\BTService_WeepingAngelExample02.cpp",
+		"arguments": [
+			"C:\\Program Files\\Microsoft Visual Studio\\2022\\Community\\VC\\Tools\\MSVC\\14.44.35207\\bin\\Hostx64\\x64\\cl.exe",
+			"@D:\\Unreal_Engine_Project_Practice\\ProjectProject01\\.vscode\\compileCommands_Default\\ProjectProject01.1.rsp"
+		],
+		"directory": "D:\\Epic Games\\UE_5.7\\Engine\\Source"
+	},
+	{
+		"file": "D:\\Unreal_Engine_Project_Practice\\ProjectProject01\\Source\\ProjectProject01\\Private\\BTTask_SelectWeepingAngelPath.cpp",
+		"arguments": [
+			"C:\\Program Files\\Microsoft Visual Studio\\2022\\Community\\VC\\Tools\\MSVC\\14.44.35207\\bin\\Hostx64\\x64\\cl.exe",
+			"@D:\\Unreal_Engine_Project_Practice\\ProjectProject01\\.vscode\\compileCommands_Default\\ProjectProject01.1.rsp"
+		],
+		"directory": "D:\\Epic Games\\UE_5.7\\Engine\\Source"
+	},
+	{
+		"file": "D:\\Unreal_Engine_Project_Practice\\ProjectProject01\\Source\\ProjectProject01\\Private\\BTTask_UpdateWeepingAngelPath.cpp",
+		"arguments": [
+			"C:\\Program Files\\Microsoft Visual Studio\\2022\\Community\\VC\\Tools\\MSVC\\14.44.35207\\bin\\Hostx64\\x64\\cl.exe",
+			"@D:\\Unreal_Engine_Project_Practice\\ProjectProject01\\.vscode\\compileCommands_Default\\ProjectProject01.1.rsp"
+		],
+		"directory": "D:\\Epic Games\\UE_5.7\\Engine\\Source"
+	},
+	{
+		"file": "D:\\Unreal_Engine_Project_Practice\\ProjectProject01\\Source\\ProjectProject01\\Private\\PlayerCharacter.cpp",
+		"arguments": [
+			"C:\\Program Files\\Microsoft Visual Studio\\2022\\Community\\VC\\Tools\\MSVC\\14.44.35207\\bin\\Hostx64\\x64\\cl.exe",
+			"@D:\\Unreal_Engine_Project_Practice\\ProjectProject01\\.vscode\\compileCommands_Default\\ProjectProject01.1.rsp"
+		],
+		"directory": "D:\\Epic Games\\UE_5.7\\Engine\\Source"
+	},
+	{
+		"file": "D:\\Unreal_Engine_Project_Practice\\ProjectProject01\\Source\\ProjectProject01\\Private\\ProjectPracticeGameModeBase.cpp",
+		"arguments": [
+			"C:\\Program Files\\Microsoft Visual Studio\\2022\\Community\\VC\\Tools\\MSVC\\14.44.35207\\bin\\Hostx64\\x64\\cl.exe",
+			"@D:\\Unreal_Engine_Project_Practice\\ProjectProject01\\.vscode\\compileCommands_Default\\ProjectProject01.1.rsp"
+		],
+		"directory": "D:\\Epic Games\\UE_5.7\\Engine\\Source"
+	},
+	{
+		"file": "D:\\Unreal_Engine_Project_Practice\\ProjectProject01\\Source\\ProjectProject01\\Private\\WeepingAngelCharacter.cpp",
+		"arguments": [
+			"C:\\Program Files\\Microsoft Visual Studio\\2022\\Community\\VC\\Tools\\MSVC\\14.44.35207\\bin\\Hostx64\\x64\\cl.exe",
+			"@D:\\Unreal_Engine_Project_Practice\\ProjectProject01\\.vscode\\compileCommands_Default\\ProjectProject01.1.rsp"
+		],
+		"directory": "D:\\Epic Games\\UE_5.7\\Engine\\Source"
+	},
+	{
+		"file": "D:\\Unreal_Engine_Project_Practice\\ProjectProject01\\Source\\ProjectProject01\\Private\\WeepingAngelController.cpp",
+		"arguments": [
+			"C:\\Program Files\\Microsoft Visual Studio\\2022\\Community\\VC\\Tools\\MSVC\\14.44.35207\\bin\\Hostx64\\x64\\cl.exe",
+			"@D:\\Unreal_Engine_Project_Practice\\ProjectProject01\\.vscode\\compileCommands_Default\\ProjectProject01.1.rsp"
+		],
+		"directory": "D:\\Epic Games\\UE_5.7\\Engine\\Source"
+	},
+	{
+		"file": "D:\\Unreal_Engine_Project_Practice\\ProjectProject01\\Source\\ProjectProject01\\Private\\WeepingAngelPath.cpp",
+		"arguments": [
+			"C:\\Program Files\\Microsoft Visual Studio\\2022\\Community\\VC\\Tools\\MSVC\\14.44.35207\\bin\\Hostx64\\x64\\cl.exe",
+			"@D:\\Unreal_Engine_Project_Practice\\ProjectProject01\\.vscode\\compileCommands_Default\\ProjectProject01.1.rsp"
+		],
+		"directory": "D:\\Epic Games\\UE_5.7\\Engine\\Source"
+	},
+	{
+		"file": "D:\\Unreal_Engine_Project_Practice\\ProjectProject01\\Source\\ProjectProject01\\Private\\WeepingAngelSurroundManager.cpp",
+		"arguments": [
+			"C:\\Program Files\\Microsoft Visual Studio\\2022\\Community\\VC\\Tools\\MSVC\\14.44.35207\\bin\\Hostx64\\x64\\cl.exe",
+			"@D:\\Unreal_Engine_Project_Practice\\ProjectProject01\\.vscode\\compileCommands_Default\\ProjectProject01.1.rsp"
+		],
+		"directory": "D:\\Epic Games\\UE_5.7\\Engine\\Source"
+	},
+	{
+		"file": "D:\\Unreal_Engine_Project_Practice\\ProjectProject01\\Source\\ProjectProject01\\ProjectProject01.Build.cs",
+		"arguments": [
+			"C:\\Program Files\\Microsoft Visual Studio\\2022\\Community\\VC\\Tools\\MSVC\\14.44.35207\\bin\\Hostx64\\x64\\cl.exe",
+			"@D:\\Unreal_Engine_Project_Practice\\ProjectProject01\\.vscode\\compileCommands_Default\\ProjectProject01.1.rsp"
+		],
+		"directory": "D:\\Epic Games\\UE_5.7\\Engine\\Source"
+	},
+	{
+		"file": "D:\\Unreal_Engine_Project_Practice\\ProjectProject01\\Source\\ProjectProject01\\ProjectProject01.cpp",
+		"arguments": [
+			"C:\\Program Files\\Microsoft Visual Studio\\2022\\Community\\VC\\Tools\\MSVC\\14.44.35207\\bin\\Hostx64\\x64\\cl.exe",
+			"@D:\\Unreal_Engine_Project_Practice\\ProjectProject01\\.vscode\\compileCommands_Default\\ProjectProject01.1.rsp"
+		],
+		"directory": "D:\\Epic Games\\UE_5.7\\Engine\\Source"
+	},
+	{
+		"file": "D:\\Unreal_Engine_Project_Practice\\ProjectProject01\\Source\\ProjectProject01\\ProjectProject01.h",
+		"arguments": [
+			"C:\\Program Files\\Microsoft Visual Studio\\2022\\Community\\VC\\Tools\\MSVC\\14.44.35207\\bin\\Hostx64\\x64\\cl.exe",
+			"@D:\\Unreal_Engine_Project_Practice\\ProjectProject01\\.vscode\\compileCommands_Default\\ProjectProject01.1.rsp"
+		],
+		"directory": "D:\\Epic Games\\UE_5.7\\Engine\\Source"
+	},
+	{
+		"file": "D:\\Unreal_Engine_Project_Practice\\ProjectProject01\\Source\\ProjectProject01\\Public\\BTService_WeepingAngel.h",
+		"arguments": [
+			"C:\\Program Files\\Microsoft Visual Studio\\2022\\Community\\VC\\Tools\\MSVC\\14.44.35207\\bin\\Hostx64\\x64\\cl.exe",
+			"@D:\\Unreal_Engine_Project_Practice\\ProjectProject01\\.vscode\\compileCommands_Default\\ProjectProject01.1.rsp"
+		],
+		"directory": "D:\\Epic Games\\UE_5.7\\Engine\\Source"
+	},
+	{
+		"file": "D:\\Unreal_Engine_Project_Practice\\ProjectProject01\\Source\\ProjectProject01\\Public\\BTService_WeepingAngelExample01.h",
+		"arguments": [
+			"C:\\Program Files\\Microsoft Visual Studio\\2022\\Community\\VC\\Tools\\MSVC\\14.44.35207\\bin\\Hostx64\\x64\\cl.exe",
+			"@D:\\Unreal_Engine_Project_Practice\\ProjectProject01\\.vscode\\compileCommands_Default\\ProjectProject01.1.rsp"
+		],
+		"directory": "D:\\Epic Games\\UE_5.7\\Engine\\Source"
+	},
+	{
+		"file": "D:\\Unreal_Engine_Project_Practice\\ProjectProject01\\Source\\ProjectProject01\\Public\\BTService_WeepingAngelExample02.h",
+		"arguments": [
+			"C:\\Program Files\\Microsoft Visual Studio\\2022\\Community\\VC\\Tools\\MSVC\\14.44.35207\\bin\\Hostx64\\x64\\cl.exe",
+			"@D:\\Unreal_Engine_Project_Practice\\ProjectProject01\\.vscode\\compileCommands_Default\\ProjectProject01.1.rsp"
+		],
+		"directory": "D:\\Epic Games\\UE_5.7\\Engine\\Source"
+	},
+	{
+		"file": "D:\\Unreal_Engine_Project_Practice\\ProjectProject01\\Source\\ProjectProject01\\Public\\BTTask_SelectWeepingAngelPath.h",
+		"arguments": [
+			"C:\\Program Files\\Microsoft Visual Studio\\2022\\Community\\VC\\Tools\\MSVC\\14.44.35207\\bin\\Hostx64\\x64\\cl.exe",
+			"@D:\\Unreal_Engine_Project_Practice\\ProjectProject01\\.vscode\\compileCommands_Default\\ProjectProject01.1.rsp"
+		],
+		"directory": "D:\\Epic Games\\UE_5.7\\Engine\\Source"
+	},
+	{
+		"file": "D:\\Unreal_Engine_Project_Practice\\ProjectProject01\\Source\\ProjectProject01\\Public\\BTTask_UpdateWeepingAngelPath.h",
+		"arguments": [
+			"C:\\Program Files\\Microsoft Visual Studio\\2022\\Community\\VC\\Tools\\MSVC\\14.44.35207\\bin\\Hostx64\\x64\\cl.exe",
+			"@D:\\Unreal_Engine_Project_Practice\\ProjectProject01\\.vscode\\compileCommands_Default\\ProjectProject01.1.rsp"
+		],
+		"directory": "D:\\Epic Games\\UE_5.7\\Engine\\Source"
+	},
+	{
+		"file": "D:\\Unreal_Engine_Project_Practice\\ProjectProject01\\Source\\ProjectProject01\\Public\\PlayerCharacter.h",
+		"arguments": [
+			"C:\\Program Files\\Microsoft Visual Studio\\2022\\Community\\VC\\Tools\\MSVC\\14.44.35207\\bin\\Hostx64\\x64\\cl.exe",
+			"@D:\\Unreal_Engine_Project_Practice\\ProjectProject01\\.vscode\\compileCommands_Default\\ProjectProject01.1.rsp"
+		],
+		"directory": "D:\\Epic Games\\UE_5.7\\Engine\\Source"
+	},
+	{
+		"file": "D:\\Unreal_Engine_Project_Practice\\ProjectProject01\\Source\\ProjectProject01\\Public\\ProjectPracticeGameModeBase.h",
+		"arguments": [
+			"C:\\Program Files\\Microsoft Visual Studio\\2022\\Community\\VC\\Tools\\MSVC\\14.44.35207\\bin\\Hostx64\\x64\\cl.exe",
+			"@D:\\Unreal_Engine_Project_Practice\\ProjectProject01\\.vscode\\compileCommands_Default\\ProjectProject01.1.rsp"
+		],
+		"directory": "D:\\Epic Games\\UE_5.7\\Engine\\Source"
+	},
+	{
+		"file": "D:\\Unreal_Engine_Project_Practice\\ProjectProject01\\Source\\ProjectProject01\\Public\\WeepingAngelCharacter.h",
+		"arguments": [
+			"C:\\Program Files\\Microsoft Visual Studio\\2022\\Community\\VC\\Tools\\MSVC\\14.44.35207\\bin\\Hostx64\\x64\\cl.exe",
+			"@D:\\Unreal_Engine_Project_Practice\\ProjectProject01\\.vscode\\compileCommands_Default\\ProjectProject01.1.rsp"
+		],
+		"directory": "D:\\Epic Games\\UE_5.7\\Engine\\Source"
+	},
+	{
+		"file": "D:\\Unreal_Engine_Project_Practice\\ProjectProject01\\Source\\ProjectProject01\\Public\\WeepingAngelController.h",
+		"arguments": [
+			"C:\\Program Files\\Microsoft Visual Studio\\2022\\Community\\VC\\Tools\\MSVC\\14.44.35207\\bin\\Hostx64\\x64\\cl.exe",
+			"@D:\\Unreal_Engine_Project_Practice\\ProjectProject01\\.vscode\\compileCommands_Default\\ProjectProject01.1.rsp"
+		],
+		"directory": "D:\\Epic Games\\UE_5.7\\Engine\\Source"
+	},
+	{
+		"file": "D:\\Unreal_Engine_Project_Practice\\ProjectProject01\\Source\\ProjectProject01\\Public\\WeepingAngelPath.h",
+		"arguments": [
+			"C:\\Program Files\\Microsoft Visual Studio\\2022\\Community\\VC\\Tools\\MSVC\\14.44.35207\\bin\\Hostx64\\x64\\cl.exe",
+			"@D:\\Unreal_Engine_Project_Practice\\ProjectProject01\\.vscode\\compileCommands_Default\\ProjectProject01.1.rsp"
+		],
+		"directory": "D:\\Epic Games\\UE_5.7\\Engine\\Source"
+	},
+	{
+		"file": "D:\\Unreal_Engine_Project_Practice\\ProjectProject01\\Source\\ProjectProject01\\Public\\WeepingAngelSurroundManager.h",
+		"arguments": [
+			"C:\\Program Files\\Microsoft Visual Studio\\2022\\Community\\VC\\Tools\\MSVC\\14.44.35207\\bin\\Hostx64\\x64\\cl.exe",
+			"@D:\\Unreal_Engine_Project_Practice\\ProjectProject01\\.vscode\\compileCommands_Default\\ProjectProject01.1.rsp"
+		],
+		"directory": "D:\\Epic Games\\UE_5.7\\Engine\\Source"
+	}
+]
