@@ -1,24 +1,11 @@
 {
     "configurations": [
         {
-            "name": "ProjectProject01Editor Editor Win64 Development (ProjectProject01)",
-            "compilerPath": "C:\\Program Files\\Microsoft Visual Studio\\2022\\Community\\VC\\Tools\\MSVC\\14.44.35207\\bin\\Hostx64\\x64\\cl.exe",
-            "cStandard": "c17",
-            "cppStandard": "c++20",
-            "intelliSenseMode": "msvc-x64",
-            "compileCommands": [
-                "D:\\Unreal_Engine_Project_Practice\\ProjectProject01\\.vscode\\compileCommands_ProjectProject01.json"
-            ]
-        },
-        {
             "name": "Win32",
-            "compilerPath": "C:\\Program Files\\Microsoft Visual Studio\\2022\\Community\\VC\\Tools\\MSVC\\14.44.35207\\bin\\Hostx64\\x64\\cl.exe",
             "cStandard": "c17",
             "cppStandard": "c++20",
             "intelliSenseMode": "msvc-x64",
-            "compileCommands": [
-                "D:\\Unreal_Engine_Project_Practice\\ProjectProject01\\.vscode\\compileCommands_Default.json"
-            ]
+            "compilerPath": "C:\\Program Files\\Microsoft Visual Studio\\2022\\Community\\VC\\Tools\\MSVC\\14.44.35207\\bin\\Hostx64\\x64\\cl.exe"
         }
     ],
     "version": 4
