@@ -21,6 +21,9 @@ public:
 	// 두 통로 사이의 그래프 거리 계산
 	float GetGraphDistance(AWeepingAngelPath* StartPath, AWeepingAngelPath* GoalPath) const;
 
+    // Shared edge cost: distance in cm plus path weight; visible destinations are blocked.
+    float GetTraversalCost(AWeepingAngelPath* FromPath, AWeepingAngelPath* ToPath) const;
+
 protected:
 	// Called when the game starts or when spawned
 	virtual void BeginPlay() override;

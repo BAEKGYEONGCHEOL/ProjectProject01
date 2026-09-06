@@ -103,6 +103,17 @@ void AWeepingAngelSurroundManager::SetAngelAssignment(AWeepingAngelCharacter* An
 }
 
 // 두 통로 사이의 그래프 거리 계산
+float AWeepingAngelSurroundManager::GetTraversalCost(AWeepingAngelPath* FromPath, AWeepingAngelPath* ToPath) const
+{
+    if (!IsValid(FromPath) || !IsValid(ToPath) || ToPath->IsVisibleToPlayer())
+    {
+        return TNumericLimits<float>::Max();
+    }
+    // Convert the existing dimensionless path weight to a distance penalty (100 cm per unit).
+    return FVector::Dist2D(FromPath->GetAngelPathLocation(), ToPath->GetAngelPathLocation()) +
+        FMath::Max(0.0f, ToPath->GetWeight()) * 100.0f;
+}
+
 float AWeepingAngelSurroundManager::GetGraphDistance(AWeepingAngelPath* StartPath, AWeepingAngelPath* GoalPath) const
 {
 	if (!IsValid(StartPath) || !IsValid(GoalPath))
@@ -164,8 +175,11 @@ float AWeepingAngelSurroundManager::GetGraphDistance(AWeepingAngelPath* StartPat
 				continue;
 			}
 
-			const float EdgeDistance = FVector::Dist2D(CurrentPath->GetAngelPathLocation(), ConnectedPath->GetAngelPathLocation());
-
+            const float EdgeDistance = GetTraversalCost(CurrentPath, ConnectedPath);
+            if (EdgeDistance == TNumericLimits<float>::Max())
+            {
+                continue;
+            }
 			const float NewDistance = CurrentDistance + EdgeDistance;
 
 			float* ExistingDistance = Distances.Find(ConnectedPath);
@@ -326,8 +340,12 @@ void AWeepingAngelSurroundManager::UpdateAssignments()
 	// 플레이어가 모든 연결 통로를 보고 있는 경우
 	if (AvailableEntrances.Num() == 0)
 	{
-        // Replace stale assignments with the player's current corridor.
-        AvailableEntrances.Add(PlayerCurrentPath.Get());
+        // No hidden entrance: wait for a new assignment instead of bypassing surround behavior.
+        for (AWeepingAngelCharacter* Angel : ChasingAngels)
+        {
+            SetAngelAssignment(Angel, nullptr);
+        }
+        return;
 	}
 
 	// 플레이어에게 가까운 입구 순서로 정렬
