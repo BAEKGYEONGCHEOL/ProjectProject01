@@ -10,6 +10,9 @@
 #include "Engine/World.h"
 
 #if WITH_EDITOR
+#include "GameFramework/PlayerController.h"
+#include "GameFramework/CharacterMovementComponent.h"
+#include "Components/CapsuleComponent.h"
 #include "InputAction.h"
 #include "UObject/ConstructorHelpers.h"
 #include "SceneView.h"
@@ -55,6 +58,11 @@ public:
         InView.CullingOrigin = InView.ViewLocation;
         InView.bHasNearClippingPlane =
             InView.ViewMatrices.GetWorldToClip().GetFrustumNearPlane(InView.NearClippingPlane);
+
+        // GameThread에서 실제 표시할 화면의 역행렬을 다음 입력 처리에 제공한다.
+        Owner->DebugClipToWorld = InView.ViewMatrices.GetClipToWorld();
+        Owner->DebugViewRect = InView.UnscaledViewRect;
+        Owner->bHasDebugView = true;
     }
 
 private:
@@ -149,6 +157,8 @@ void APlayerCharacter::BeginPlay()
 void APlayerCharacter::EndPlay(const EEndPlayReason::Type EndPlayReason)
 {
 #if WITH_EDITOR
+    bUseTopViewInPIE = false;
+    RestoreDebugControls();
     TopViewExtension.Reset();
 #endif
     Super::EndPlay(EndPlayReason);
@@ -158,6 +168,10 @@ void APlayerCharacter::EndPlay(const EEndPlayReason::Type EndPlayReason)
 void APlayerCharacter::Tick(float DeltaTime)
 {
 	Super::Tick(DeltaTime);
+
+#if WITH_EDITOR
+    UpdateDebugCursorAim();
+#endif
 
 }
 
@@ -200,20 +214,160 @@ void APlayerCharacter::ToggleDebugCamera()
     {
         return;
     }
-    if (!IsValid(DebugTopViewCamera) || !TopViewExtension.IsValid())
+    if (bUseTopViewInPIE)
     {
-        UE_LOG(LogTemp, Warning, TEXT("Debug camera toggle unavailable on %s."), *GetName());
+        bUseTopViewInPIE = false;
+        RestoreDebugControls();
         return;
     }
 
-    // 표시 화면만 토글하며 원래 플레이어 카메라와 AI 판정은 유지한다.
-    bUseTopViewInPIE = !bUseTopViewInPIE;
+    APlayerController* PlayerController = Cast<APlayerController>(GetController());
+    UCharacterMovementComponent* Movement = GetCharacterMovement();
+    if (!IsValid(PlayerController) || !IsValid(Movement) || !IsValid(Camera) ||
+        !IsValid(DebugTopViewCamera) || !TopViewExtension.IsValid())
+    {
+        UE_LOG(LogTemp, Warning, TEXT("Debug camera controls unavailable on %s."), *GetName());
+        return;
+    }
+
+    DebugInputController = PlayerController;
+    SavedControlRotation = PlayerController->GetControlRotation();
+    SavedCameraRelativeRotation = Camera->GetRelativeRotation();
+    bSavedUseControllerRotationYaw = bUseControllerRotationYaw;
+    bSavedOrientRotationToMovement = Movement->bOrientRotationToMovement;
+    bSavedUseControllerDesiredRotation = Movement->bUseControllerDesiredRotation;
+    bSavedCameraUsePawnControlRotation = Camera->bUsePawnControlRotation;
+    bDebugControlsActive = true;
+
+    bUseControllerRotationYaw = true;
+    Movement->bOrientRotationToMovement = false;
+    Movement->bUseControllerDesiredRotation = false;
+    Camera->bUsePawnControlRotation = true;
+    PlayerController->SetControlRotation(FRotator(0.0f, SavedControlRotation.Yaw, 0.0f));
+
+    FInputModeGameAndUI DebugInputMode;
+    DebugInputMode.SetHideCursorDuringCapture(false);
+    DebugInputMode.SetLockMouseToViewportBehavior(EMouseLockMode::LockAlways);
+    PlayerController->SetInputMode(DebugInputMode);
+    PlayerController->bShowMouseCursor = true;
+
+    int32 SizeX = 0;
+    int32 SizeY = 0;
+    PlayerController->GetViewportSize(SizeX, SizeY);
+    if (SizeX > 0 && SizeY > 0)
+    {
+        PlayerController->SetMouseLocation(SizeX / 2, SizeY / 2);
+    }
+    bHasDebugView = false;
+    bUseTopViewInPIE = true;
 }
+
+void APlayerCharacter::RestoreDebugControls()
+{
+    bHasDebugView = false;
+    if (!bDebugControlsActive)
+    {
+        return;
+    }
+
+    bUseControllerRotationYaw = bSavedUseControllerRotationYaw;
+    if (UCharacterMovementComponent* Movement = GetCharacterMovement(); IsValid(Movement))
+    {
+        Movement->bOrientRotationToMovement = bSavedOrientRotationToMovement;
+        Movement->bUseControllerDesiredRotation = bSavedUseControllerDesiredRotation;
+    }
+    if (IsValid(Camera))
+    {
+        Camera->bUsePawnControlRotation = bSavedCameraUsePawnControlRotation;
+        Camera->SetRelativeRotation(SavedCameraRelativeRotation);
+    }
+    if (APlayerController* PlayerController = DebugInputController.Get(); IsValid(PlayerController))
+    {
+        // 조준한 수평 방향은 유지하고 기존 카메라의 상하 각도와 입력 방식을 복원한다.
+        PlayerController->SetControlRotation(FRotator(
+            SavedControlRotation.Pitch, PlayerController->GetControlRotation().Yaw, SavedControlRotation.Roll));
+        PlayerController->bShowMouseCursor = false;
+        PlayerController->SetInputMode(FInputModeGameOnly());
+    }
+    DebugInputController.Reset();
+    bDebugControlsActive = false;
+    bSkipNextLookInput = true;
+}
+
+void APlayerCharacter::UpdateDebugCursorAim()
+{
+    if (!bUseTopViewInPIE || !bHasDebugView || !IsLocallyControlled())
+    {
+        return;
+    }
+
+    APlayerController* PlayerController = DebugInputController.Get();
+    UCapsuleComponent* Capsule = GetCapsuleComponent();
+    if (!IsValid(PlayerController) || PlayerController->GetPawn() != this || !IsValid(Capsule))
+    {
+        return;
+    }
+
+    float MouseX = 0.0f;
+    float MouseY = 0.0f;
+    if (!PlayerController->GetMousePosition(MouseX, MouseY) ||
+        DebugViewRect.Width() <= 0 || DebugViewRect.Height() <= 0 ||
+        MouseX < DebugViewRect.Min.X || MouseX >= DebugViewRect.Max.X ||
+        MouseY < DebugViewRect.Min.Y || MouseY >= DebugViewRect.Max.Y)
+    {
+        return;
+    }
+
+    FVector RayOrigin;
+    FVector RayDirection;
+    // 실제 표시한 탑뷰 행렬을 사용한다. 기본 카메라의 Deproject 함수는 사용하지 않는다.
+    FSceneView::DeprojectScreenToWorld(
+        FVector2D(MouseX, MouseY), DebugViewRect, DebugClipToWorld, RayOrigin, RayDirection);
+    if (RayOrigin.ContainsNaN() || RayDirection.ContainsNaN() || FMath::Abs(RayDirection.Z) < 0.0001)
+    {
+        return;
+    }
+
+    const double GroundHeight = GetActorLocation().Z - Capsule->GetScaledCapsuleHalfHeight();
+    const double RayDistance = (GroundHeight - RayOrigin.Z) / RayDirection.Z;
+    if (!FMath::IsFinite(RayDistance) || RayDistance < 0.0)
+    {
+        return;
+    }
+    FVector AimDirection = RayOrigin + RayDirection * RayDistance - GetActorLocation();
+    AimDirection.Z = 0.0;
+    // 커서가 캐릭터 중심에 가까우면 작은 위치 오차로 방향이 뒤집히지 않도록 유지한다.
+    if (AimDirection.ContainsNaN() || AimDirection.SizeSquared() < 25.0 * 25.0)
+    {
+        return;
+    }
+
+    const FRotator AimRotation(0.0f, AimDirection.Rotation().Yaw, 0.0f);
+    PlayerController->SetControlRotation(AimRotation);
+    SetActorRotation(AimRotation);
+}
+
+
 #endif
 
 void APlayerCharacter::Move(const FInputActionValue& Value)
 {
 	const FVector2D MovementVector = Value.Get<FVector2D>();
+
+#if WITH_EDITOR
+    if (bUseTopViewInPIE)
+    {
+        if (IsValid(DebugTopViewCamera))
+        {
+            // 수직 탑뷰에서는 카메라 Forward가 아래를 향하므로 화면 위쪽인 Up을 사용한다.
+            const FVector ScreenForward = DebugTopViewCamera->GetUpVector().GetSafeNormal2D();
+            const FVector ScreenRight = DebugTopViewCamera->GetRightVector().GetSafeNormal2D();
+            AddMovementInput(ScreenForward, MovementVector.X);
+            AddMovementInput(ScreenRight, MovementVector.Y);
+        }
+        return;
+    }
+#endif
 
 	AddMovementInput(GetActorForwardVector(), MovementVector.X);
 	AddMovementInput(GetActorRightVector(), MovementVector.Y);
@@ -221,6 +375,18 @@ void APlayerCharacter::Move(const FInputActionValue& Value)
 
 void APlayerCharacter::Look(const FInputActionValue& Value)
 {
+#if WITH_EDITOR
+    if (bUseTopViewInPIE)
+    {
+        return;
+    }
+    // 상대 마우스 입력으로 복귀할 때 남아 있는 첫 델타로 화면이 튀는 것을 방지한다.
+    if (bSkipNextLookInput)
+    {
+        bSkipNextLookInput = false;
+        return;
+    }
+#endif
 	const FVector2D LookVector = Value.Get<FVector2D>();
 
 	AddControllerYawInput(LookVector.X);

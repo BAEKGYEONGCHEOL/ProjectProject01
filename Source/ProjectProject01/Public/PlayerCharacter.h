@@ -47,6 +47,20 @@ private:
 #if WITH_EDITOR
     friend class FProjectProject01TopViewExtension;
     void ToggleDebugCamera();
+    void RestoreDebugControls();
+    void UpdateDebugCursorAim();
+    TWeakObjectPtr<class APlayerController> DebugInputController;
+    FMatrix DebugClipToWorld = FMatrix::Identity;
+    FIntRect DebugViewRect = FIntRect(0, 0, 0, 0);
+    FRotator SavedControlRotation = FRotator::ZeroRotator;
+    FRotator SavedCameraRelativeRotation = FRotator::ZeroRotator;
+    bool bHasDebugView = false;
+    bool bDebugControlsActive = false;
+    bool bSkipNextLookInput = false;
+    bool bSavedUseControllerRotationYaw = false;
+    bool bSavedOrientRotationToMovement = false;
+    bool bSavedUseControllerDesiredRotation = false;
+    bool bSavedCameraUsePawnControlRotation = false;
     TSharedPtr<class FProjectProject01TopViewExtension, ESPMode::ThreadSafe> TopViewExtension;
 #endif
 
