@@ -20,6 +20,7 @@
 #include "WeepingAngelPath.h"
 
 #include "WeepingAngelSurroundManager.h"
+#include "Engine/World.h"
 
 
 UBTService_WeepingAngelExample02::UBTService_WeepingAngelExample02()
@@ -49,12 +50,18 @@ void UBTService_WeepingAngelExample02::TickNode(UBehaviorTreeComponent& OwnerCom
 {
 	Super::TickNode(OwnerComp, NodeMemory, DeltaSeconds);
 
+    if (!IsValid(GetWorld()))
+    {
+        UE_LOG(LogTemp, Warning, TEXT("Weeping Angel visibility update skipped: invalid World."));
+        return;
+    }
+
     // 현재 플레이어 캐릭터를 가져온다.
     // GetPlayerPawn()의 0은 첫 번째 플레이어(싱글 플레이 기준 플레이어)를 의미한다.
     APawn* PlayerPawn = UGameplayStatics::GetPlayerPawn(GetWorld(), 0);
 
     // 플레이어를 가져오지 못했다면 더 이상 진행할 수 없으므로 함수를 종료한다.
-    if (PlayerPawn == nullptr)
+    if (!IsValid(PlayerPawn))
     {
         return;
     }
@@ -63,7 +70,7 @@ void UBTService_WeepingAngelExample02::TickNode(UBehaviorTreeComponent& OwnerCom
     // Blackboard에는 TargetActor와 같은 AI의 정보를 저장한다.
     UBlackboardComponent* Blackboard = OwnerComp.GetBlackboardComponent();
     // Blackboard를 가져오지 못했다면 값을 저장하거나 삭제할 수 없으므로 함수를 종료한다.
-    if (Blackboard == nullptr)
+    if (!IsValid(Blackboard))
     {
         return;
     }
@@ -73,7 +80,7 @@ void UBTService_WeepingAngelExample02::TickNode(UBehaviorTreeComponent& OwnerCom
     // 0 : 첫 번째 플레이어
     APlayerController* PlayerController = UGameplayStatics::GetPlayerController(GetWorld(), 0);
     // PlayerController를 가져오지 못했다면 함수를 종료한다.
-    if (PlayerController == nullptr)
+    if (!IsValid(PlayerController))
     {
         return;
     }
@@ -82,7 +89,7 @@ void UBTService_WeepingAngelExample02::TickNode(UBehaviorTreeComponent& OwnerCom
     // CameraManager를 통해 현재 플레이어 카메라의 위치와 회전 등을 확인할 수 있다. 
     APlayerCameraManager* CameraManager = PlayerController->PlayerCameraManager;
     // CameraManager가 없다면 함수를 종료한다.
-    if (CameraManager == nullptr)
+    if (!IsValid(CameraManager))
     {
         return;
     }
@@ -95,7 +102,7 @@ void UBTService_WeepingAngelExample02::TickNode(UBehaviorTreeComponent& OwnerCom
     AAIController* AIController =
         OwnerComp.GetAIOwner();
 
-    if (AIController == nullptr)
+    if (!IsValid(AIController))
     {
         return;
     }
@@ -103,7 +110,7 @@ void UBTService_WeepingAngelExample02::TickNode(UBehaviorTreeComponent& OwnerCom
     // 현재 AI Controller가 조종하고 있는 Pawn(AI 캐릭터)을 가져온다.
     APawn* AngelPawn = OwnerComp.GetAIOwner()->GetPawn();
     // AI Pawn이 없다면 함수를 종료한다.
-    if (AngelPawn == nullptr)
+    if (!IsValid(AngelPawn))
     {
         return;
     }
@@ -112,7 +119,7 @@ void UBTService_WeepingAngelExample02::TickNode(UBehaviorTreeComponent& OwnerCom
     // AngelPawn은 APawn 타입이기 때문에, 우는 천사 캐릭터에서 만든 SetFrozen() 등의 함수를 사용하려면 AWeepingAngelCharacter 타입으로 변환해야 한다.
     AWeepingAngelCharacter* Angel = Cast<AWeepingAngelCharacter>(AngelPawn);
     // AI Pawn이 우는 천사 캐릭터로 변환되지 않았다면 이후에 천사 전용 함수를 사용할 수 없으므로 함수를 종료한다.
-    if (Angel == nullptr)
+    if (!IsValid(Angel))
     {
         return;
     }
@@ -123,14 +130,14 @@ void UBTService_WeepingAngelExample02::TickNode(UBehaviorTreeComponent& OwnerCom
         SurroundManager = Cast<AWeepingAngelSurroundManager>(UGameplayStatics::GetActorOfClass(GetWorld(), AWeepingAngelSurroundManager::StaticClass()));
     }
 
-    if (SurroundManager == nullptr)
+    if (!IsValid(SurroundManager))
     {
         return;
     }
 
     // 천사의 캡슐 컴포넌트를 가져온다.
     UCapsuleComponent* AngelCapsule = Angel->GetCapsuleComponent();
-    if (AngelCapsule == nullptr)
+    if (!IsValid(AngelCapsule))
     {
         return;
     }
@@ -156,8 +163,8 @@ void UBTService_WeepingAngelExample02::TickNode(UBehaviorTreeComponent& OwnerCom
     const float DetectionMargin = 30.0f;
 
     // 캡슐의 판정 반지름과 높이에 여유를 추가한다.
-    float DetectionRadius = Radius + DetectionMargin;           // 사용하려면 해도 좋다.
-    float DetectionHalfHeight = HalfHeight + DetectionMargin;   // 높이는 굳이 사용할 필요가 없을 것 같다. 사용하려면 해도 좋다.
+    const float DetectionRadius = Radius + DetectionMargin;
+    const float DetectionHalfHeight = HalfHeight + DetectionMargin;
 
     // 캡슐의 방향을 가져온다.
     FVector Up = AngelCapsule->GetUpVector();
@@ -167,7 +174,7 @@ void UBTService_WeepingAngelExample02::TickNode(UBehaviorTreeComponent& OwnerCom
     // 천사의 Skeletal Mesh Component를 가져온다.
     USkeletalMeshComponent* AngelMesh = Angel->GetMesh();
     // Skeletal Mesh를 가져오지 못했다면 함수를 종료한다.
-    if (AngelMesh == nullptr)
+    if (!IsValid(AngelMesh))
     {
         return;
     }
@@ -216,9 +223,13 @@ void UBTService_WeepingAngelExample02::TickNode(UBehaviorTreeComponent& OwnerCom
     bool bInScreen = false;
 
     // 현재 화면의 크기를 가져옴
-    int32 SizeX;
-    int32 SizeY;
+    int32 SizeX = 0;
+    int32 SizeY = 0;
     PlayerController->GetViewportSize(SizeX, SizeY);
+    if (SizeX <= 0 || SizeY <= 0)
+    {
+        return;
+    }
 
     // 화면의 15%를 여유 공간으로 설정
     const float ScreenMarginRaito = 0.15f;
@@ -306,19 +317,97 @@ void UBTService_WeepingAngelExample02::TickNode(UBehaviorTreeComponent& OwnerCom
         }
     }
 
+    // 실제 신체 노출과 정지용 여유 영역을 구분한다.
+    // 여유 영역만 보였다고 최초 발견/추격을 시작하지 않는다.
+    const bool bBodyVisible = bInScreen;
+    if (!bInScreen)
+    {
+        TArray<FVector> GuardPoints;
+        const FVector GuardDirections[] =
+        {
+            Right, -Right, Forward, -Forward,
+            (Right + Forward).GetSafeNormal(),
+            (Right - Forward).GetSafeNormal(),
+            (-Right + Forward).GetSafeNormal(),
+            (-Right - Forward).GetSafeNormal()
+        };
+        const float CylinderHalfHeight = FMath::Max(HalfHeight - Radius, 0.0f);
+        const float GuardHeights[] = { -CylinderHalfHeight, 0.0f, CylinderHalfHeight };
+        for (const float Height : GuardHeights)
+        {
+            for (const FVector& Direction : GuardDirections)
+            {
+                GuardPoints.Add(CapsuleCenter + Up * Height + Direction * DetectionRadius);
+            }
+        }
+        GuardPoints.Add(CapsuleCenter + Up * DetectionHalfHeight);
+        GuardPoints.Add(CapsuleCenter - Up * DetectionHalfHeight);
+
+        // 캡슐 밖으로 움직이는 손발에도 수평 여유를 둔다.
+        for (const FName& BoneName : BoneNames)
+        {
+            if (AngelMesh->GetBoneIndex(BoneName) != INDEX_NONE)
+            {
+                const FVector BoneLocation = AngelMesh->GetBoneLocation(BoneName);
+                GuardPoints.Add(BoneLocation + Right * DetectionMargin);
+                GuardPoints.Add(BoneLocation - Right * DetectionMargin);
+                GuardPoints.Add(BoneLocation + Forward * DetectionMargin);
+                GuardPoints.Add(BoneLocation - Forward * DetectionMargin);
+            }
+        }
+
+        FCollisionQueryParams GuardQueryParams;
+        GuardQueryParams.AddIgnoredActor(PlayerPawn);
+        GuardQueryParams.AddIgnoredActor(Angel);
+        TArray<AActor*> GuardIgnoredAngels;
+        UGameplayStatics::GetAllActorsOfClass(GetWorld(), AWeepingAngelCharacter::StaticClass(), GuardIgnoredAngels);
+        for (AActor* OtherAngel : GuardIgnoredAngels)
+        {
+            if (IsValid(OtherAngel))
+            {
+                GuardQueryParams.AddIgnoredActor(OtherAngel);
+            }
+        }
+
+        for (const FVector& GuardPoint : GuardPoints)
+        {
+            FVector2D GuardScreenPosition;
+            if (!PlayerController->ProjectWorldLocationToScreen(GuardPoint, GuardScreenPosition))
+            {
+                continue;
+            }
+            if (GuardScreenPosition.X < -MarginX || GuardScreenPosition.X > SizeX + MarginX ||
+                GuardScreenPosition.Y < -MarginY || GuardScreenPosition.Y > SizeY + MarginY)
+            {
+                continue;
+            }
+
+            FHitResult GuardHit;
+            // 가상 검사점에는 충돌체가 없으므로 가로막는 물체가 없는지 확인한다.
+            const bool bGuardBlocked = GetWorld()->LineTraceSingleByChannel(
+                GuardHit, CameraLocation, GuardPoint, ECC_GameTraceChannel1, GuardQueryParams);
+            if (!bGuardBlocked)
+            {
+                bInScreen = true;
+                break;
+            }
+        }
+    }
+
+
     // 플레이어가 현재 천사를 바라보고 있는지 여부를 Blackboard의 PlayerLookingAtAngel Key에 저장한다.
     // bInScreen이 true라면 천사가 현재 화면의 판정 범위 안에 있다는 의미이고, false라면 천사가 화면의 판정 범위 밖에 있다는 의미이다.
     Blackboard->SetValueAsBool(TEXT("PlayerLookingAtAngel"), bInScreen);
 
     if (bInScreen)
     {
-        // // 플레이어가 천사를 보고 있으므로 AI의 이동을 즉시 중단한다.
-        // OwnerComp.GetAIOwner()->StopMovement();
+        // 정지용 여유 영역이 보이는 순간 현재 이동 요청을 중단한다.
+        AIController->StopMovement();
         // 현재 재생 중인 애니메이션을 현재 프레임에서 그대로 정지한다.
         Angel->SetFrozen(true);
 
         // 플레이어의 화면에 보이지도 않고, 천사가 플레이어를 감지하기만 하면 쫓아오는 건 불합리한 죽음을 당할 수 있기 때문에 이도 조건에 포함했다.
-        PlayerSeeAngel = true;
+        PlayerSeeAngel = PlayerSeeAngel || bBodyVisible;
     }
     else
     {
