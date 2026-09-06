@@ -105,7 +105,7 @@ APlayerCharacter::APlayerCharacter()
         DebugTopViewCamera->SetAutoActivate(false);
         DebugTopViewCamera->bUsePawnControlRotation = false;
         DebugTopViewCamera->SetAbsolute(false, true, false);
-        DebugTopViewCamera->SetRelativeLocation(FVector(0.0f, 0.0f, 4000.0f));
+        DebugTopViewCamera->SetRelativeLocation(FVector(0.0f, 0.0f, 5000.0f));
         DebugTopViewCamera->SetRelativeRotation(FRotator(-90.0f, 0.0f, 0.0f));
     }
 #endif
