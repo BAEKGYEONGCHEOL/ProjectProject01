@@ -113,11 +113,6 @@ void UBTService_WeepingAngelExample01::TickNode(UBehaviorTreeComponent& OwnerCom
     }
 
     // 천사의 AI 컨트롤러를 가져온다.
-    AAIController* AIController = OwnerComp.GetAIOwner();
-    if (AIController == nullptr)
-    {
-        return;
-    }
 
     // 천사의 캡슐 컴포넌트를 가져온다.
     UCapsuleComponent* AngelCapsule = Angel->GetCapsuleComponent();

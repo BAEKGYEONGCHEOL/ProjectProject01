@@ -17,6 +17,7 @@
 #include "Components/SkeletalMeshComponent.h"
 
 #include "NavigationSystem.h"
+#include "NavigationPath.h"
 #include "WeepingAngelPath.h"
 
 #include "WeepingAngelSurroundManager.h"
@@ -124,16 +125,12 @@ void UBTService_WeepingAngelExample02::TickNode(UBehaviorTreeComponent& OwnerCom
         return;
     }
 
-    // SurroundManager 참조가 없으면 월드에서 찾아오고, 찾지 못하면 이후 처리를 중단한다.
+    // Manager is optional: a complete player route remains usable without one.
     if (!IsValid(SurroundManager))
     {
         SurroundManager = Cast<AWeepingAngelSurroundManager>(UGameplayStatics::GetActorOfClass(GetWorld(), AWeepingAngelSurroundManager::StaticClass()));
     }
 
-    if (!IsValid(SurroundManager))
-    {
-        return;
-    }
 
     // 천사의 캡슐 컴포넌트를 가져온다.
     UCapsuleComponent* AngelCapsule = Angel->GetCapsuleComponent();
@@ -456,9 +453,6 @@ void UBTService_WeepingAngelExample02::TickNode(UBehaviorTreeComponent& OwnerCom
         AngelSeePlayer = true;
     }
 
-    // 플레이어 직접 추격 가능 여부
-    const bool bHasDirectLineToPlayer = bHit && HitResult.GetActor() == PlayerPawn;
-
     // 천사가 플레이어를 한 번 발견했다면 추적 대상으로 설정한다.
     // 플레이어의 화면에 보이지도 않고, 천사가 플레이어를 감지하기만 하면 쫓아오는 건 불합리한 죽음을 당할 수 있기 때문에 이도 조건에 포함했다.
     const bool bChaseStarted = PlayerSeeAngel && AngelSeePlayer;
@@ -469,6 +463,7 @@ void UBTService_WeepingAngelExample02::TickNode(UBehaviorTreeComponent& OwnerCom
         Blackboard->SetValueAsBool(TEXT("CanDirectChase"), false);
         Blackboard->ClearValue(TEXT("TargetActor"));
         Blackboard->ClearValue(TEXT("AngelChaseStart"));
+        RouteUpdateTimeRemaining = 0.0f;
 
         return;
     }
@@ -479,66 +474,55 @@ void UBTService_WeepingAngelExample02::TickNode(UBehaviorTreeComponent& OwnerCom
     // AngelChaseStart를 Behavior Tree에서 사용하고 있다면 유지
     Blackboard->SetValueAsObject(TEXT("AngelChaseStart"), PlayerPawn);
 
-   // 이전 프레임의 직접 추격 상태
-    const bool bWasDirectChasing = Blackboard->GetValueAsBool(TEXT("CanDirectChase"));
-
-    AWeepingAngelPath* AssignedApproachPath = Angel->GetAssignedApproachPath();
-
-    const float DistanceFromAssignedApproach = AssignedApproachPath != nullptr ? 
-        FVector::Dist2D(AngelLocation, AssignedApproachPath->GetAngelPathLocation()) : TNumericLimits<float>::Max();
-
-    const float DistanceToPlayer = FVector::Dist2D(AngelLocation, PlayerLocation);
-
-    const float ApproachArrivalRadius = 300.0f;
-
-    // 직접 추격 시작: 12m
-    const float DirectChaseStartDistance = 1200.0f;
-
-    // 직접 추격 종료: 16m
-    const float DirectChaseStopDistance = 1600.0f;
-
-    const bool bReachedAssignedApproach =
-        AssignedApproachPath != nullptr &&
-        Angel->GetCurrentPath() == AssignedApproachPath &&
-        DistanceFromAssignedApproach <= ApproachArrivalRadius;
-
-    const bool bAssignedPathHidden =
-        AssignedApproachPath != nullptr &&
-        !AssignedApproachPath->IsVisibleToPlayer();
-
-    // 담당 통로까지 도착했고 통로가 보이지 않으며 플레이어가 12m 이내이면 직접 추격 시작
-    // Move To TargetActor가 NavMesh를 사용하므로 직선 시야는 필수로 하지 않음
-    const bool bCanStartDirectChase =
-        bReachedAssignedApproach &&
-        bAssignedPathHidden &&
-        DistanceToPlayer <= DirectChaseStartDistance;
-
-    // 이미 직접 추격을 시작했다면 담당 통로에서 멀어져도 유지
-    // 플레이어가 16m보다 멀어졌을 때만 Path 추격으로 복귀
-    const bool bCanContinueDirectChase =
-        bWasDirectChasing &&
-        DistanceToPlayer <= DirectChaseStopDistance;
-
-    const bool bCanDirectChase =
-        bCanStartDirectChase ||
-        bCanContinueDirectChase;
-
-    Blackboard->SetValueAsBool(TEXT("CanDirectChase"), bCanDirectChase);
-
-    if (bCanDirectChase)
+    RouteUpdateTimeRemaining -= DeltaSeconds;
+    if (RouteUpdateTimeRemaining > 0.0f)
     {
-        // 직접 추격으로 처음 전환되는 순간에만 기존 Path 목적지 제거
-        if (!bWasDirectChasing)
+        return;
+    }
+    RouteUpdateTimeRemaining = 0.2f;
+
+    const bool bWasDirectChasing = Blackboard->GetValueAsBool(TEXT("CanDirectChase"));
+    AWeepingAngelPath* AssignedApproachPath = Angel->GetAssignedApproachPath();
+    const bool bHasAssignment = IsValid(AssignedApproachPath);
+    const float DistanceToPlayer = FVector::Dist(AngelLocation, PlayerLocation);
+    const bool bReachedAssignedApproach = bHasAssignment &&
+        FVector::Dist(AngelLocation, AssignedApproachPath->GetAngelPathLocation()) <= 300.0f;
+
+    // Query on the game thread and consume the temporary UObject immediately.
+    // A short distance through a wall is not proof of a short navigable route.
+    UNavigationPath* PlayerRoute = UNavigationSystemV1::FindPathToLocationSynchronously(
+        GetWorld(), Angel->GetNavAgentLocation(), PlayerPawn->GetNavAgentLocation(), Angel);
+    const bool bHasPlayerRoute = IsValid(PlayerRoute) &&
+        PlayerRoute->IsValid() && !PlayerRoute->IsPartial();
+    const double PlayerRouteLength = bHasPlayerRoute ?
+        PlayerRoute->GetPathLength() : TNumericLimits<double>::Max();
+    const double DirectChaseDistance = bWasDirectChasing ? 1600.0 : 1200.0;
+
+    auto SetDirectChase = [&](bool bEnabled)
+    {
+        if (bEnabled != bWasDirectChasing)
         {
+            AIController->StopMovement();
             Blackboard->ClearValue(TEXT("NextPath"));
             Blackboard->ClearValue(TEXT("NextPathLocation"));
+            UE_LOG(LogTemp, Log, TEXT("Angel chase mode: %s Direct=%d RouteLength=%.0f"),
+                *Angel->GetName(), bEnabled, PlayerRouteLength);
         }
+        Blackboard->SetValueAsBool(TEXT("CanDirectChase"), bEnabled);
+    };
 
+    // Arrival is terminal for the corridor route, even when the entrance is visible.
+    const bool bCanDirectChase = bHasPlayerRoute &&
+        ((DistanceToPlayer <= DirectChaseDistance && PlayerRouteLength <= DirectChaseDistance) ||
+            bReachedAssignedApproach || !bHasAssignment || !IsValid(SurroundManager));
+    if (bCanDirectChase)
+    {
+        SetDirectChase(true);
         return;
     }
 
     // 직접 추격이 끝난 순간 CurrentPath 재설정
-    // 이전 프레임에는 직접 추격했지만 지금은 벽에 가려져 직접 추격할 수 없어진 상황
+    // Re-anchor when the direct navigation route no longer satisfies chase conditions.
     if (bWasDirectChasing && !bCanDirectChase)
     {
         TArray<AActor*> PathActors;
@@ -551,7 +535,7 @@ void UBTService_WeepingAngelExample02::TickNode(UBehaviorTreeComponent& OwnerCom
         for (AActor* PathActor : PathActors)
         {
             AWeepingAngelPath* Path = Cast<AWeepingAngelPath>(PathActor);
-            if (Path == nullptr)
+            if (!IsValid(Path))
             {
                 continue;
             }
@@ -587,85 +571,65 @@ void UBTService_WeepingAngelExample02::TickNode(UBehaviorTreeComponent& OwnerCom
     }
 
     AWeepingAngelPath* CurrentPath = Angel->GetCurrentPath();
-    if (CurrentPath == nullptr)
+    AWeepingAngelPath* CurrentNextPath =
+        Cast<AWeepingAngelPath>(Blackboard->GetValueAsObject(TEXT("NextPath")));
+    // Finish the active corridor leg before accepting a new manager assignment.
+    // Otherwise a non-observing MoveTo may finish the old vector but commit the new NextPath.
+    if (!bWasDirectChasing && IsValid(CurrentPath) && IsValid(CurrentNextPath) &&
+        CurrentPath != CurrentNextPath && CurrentPath->GetConnectedPaths().Contains(CurrentNextPath))
     {
         return;
     }
 
-    // 현재 Path와 연결된 Path 가져오기
-    const TArray<TObjectPtr<AWeepingAngelPath>>& ConnectedPaths = CurrentPath->GetConnectedPaths();
-
-    if (ConnectedPaths.Num() == 0)
-    {
-        return;
-    }
-
-    TArray<AWeepingAngelPath*> CandidatePaths;
-
-    for (const TObjectPtr<AWeepingAngelPath>& ConnectedPath : ConnectedPaths)
-    {
-        if (ConnectedPath != nullptr)
-        {
-            CandidatePaths.AddUnique(ConnectedPath.Get());
-        }
-    }
-
-    if (CandidatePaths.Num() == 0)
-    {
-        return;
-    }
-
-    AWeepingAngelPath* CurrentNextPath = Cast<AWeepingAngelPath>(Blackboard->GetValueAsObject(TEXT("NextPath")));
-
-    // 가장 좋은 다음 Path 찾기
     AWeepingAngelPath* BestPath = nullptr;
     float BestScore = TNumericLimits<float>::Max();
 
-    for (AWeepingAngelPath* Path : CandidatePaths)
+    if (IsValid(CurrentPath) && bHasAssignment && IsValid(SurroundManager) &&
+        CurrentPath != AssignedApproachPath && !bReachedAssignedApproach)
     {
-        if (Path == nullptr)
+        const float CurrentDistance = SurroundManager->GetGraphDistance(CurrentPath, AssignedApproachPath);
+        for (const TObjectPtr<AWeepingAngelPath>& Candidate : CurrentPath->GetConnectedPaths())
         {
-            continue;
-        }
-
-        // 플레이어가 보고 있는 통로는 후보에서 완전히 제외
-        if (Path->IsVisibleToPlayer())
-        {
-            continue;
-        }
-
-        const float GraphDistance = SurroundManager->GetGraphDistance(Path, AssignedApproachPath);
-
-        // 담당 입구까지 연결되지 않는 후보
-        if(GraphDistance == TNumericLimits<float>::Max())
-        {
-            continue;
-        }
-
-        float Score = GraphDistance;
-
-        // 기존 NextPath를 약간 우대하여 진동 방지
-        if (Path == CurrentNextPath)
-        {
-            Score -= 200.0f;
-        }
-
-        if (Score < BestScore)
-        {
-            BestScore = Score;
-            BestPath = Path;
+            AWeepingAngelPath* Path = Candidate.Get();
+            if (!IsValid(Path) || Path == CurrentPath)
+            {
+                continue;
+            }
+            const float RemainingDistance = SurroundManager->GetGraphDistance(Path, AssignedApproachPath);
+            // Strict progress prevents A -> B -> A when the goal stays fixed.
+            if (RemainingDistance == TNumericLimits<float>::Max() || RemainingDistance >= CurrentDistance)
+            {
+                continue;
+            }
+            const float Score = FVector::Dist2D(CurrentPath->GetAngelPathLocation(),
+                Path->GetAngelPathLocation()) + RemainingDistance;
+            // Visibility must not remove the only route. Actual angel visibility still freezes movement.
+            if (Score < BestScore || (Score == BestScore && Path == CurrentNextPath))
+            {
+                BestScore = Score;
+                BestPath = Path;
+            }
         }
     }
 
-    if (BestPath == nullptr)
+    if (!IsValid(BestPath))
     {
-        Blackboard->ClearValue(TEXT("NextPath"));
-        Blackboard->ClearValue(TEXT("NextPathLocation"));
-
-        AIController->StopMovement();
-
+        // No corridor route (or already at its end): use a complete player route, never wander.
+        SetDirectChase(bHasPlayerRoute);
+        if (!bHasPlayerRoute)
+        {
+            if (IsValid(CurrentNextPath))
+            {
+                UE_LOG(LogTemp, Warning, TEXT("Angel has no complete route: %s"), *Angel->GetName());
+            }
+            Blackboard->ClearValue(TEXT("NextPath"));
+            Blackboard->ClearValue(TEXT("NextPathLocation"));
+            AIController->StopMovement();
+        }
         return;
     }
+
+    SetDirectChase(false);
 
     // NextPath가 변경되었을 때만 갱신
     if (CurrentNextPath != BestPath)

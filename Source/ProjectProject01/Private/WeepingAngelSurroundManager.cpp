@@ -50,19 +50,19 @@ void AWeepingAngelSurroundManager::Tick(float DeltaTime)
 // 천사가 추격 중인지 확인
 bool AWeepingAngelSurroundManager::IsAngelChasing(AWeepingAngelCharacter* Angel) const
 {
-	if (Angel == nullptr)
+	if (!IsValid(Angel))
 	{
 		return false;
 	}
 
 	AAIController* AIController = Cast<AAIController>(Angel->GetController());
-	if (AIController == nullptr)
+	if (!IsValid(AIController))
 	{
 		return false;
 	}
 
 	UBlackboardComponent* Blackboard = AIController->GetBlackboardComponent();
-	if (Blackboard == nullptr)
+	if (!IsValid(Blackboard))
 	{
 		return false;
 	}
@@ -73,7 +73,7 @@ bool AWeepingAngelSurroundManager::IsAngelChasing(AWeepingAngelCharacter* Angel)
 // 천사에게 접근 통로 배정
 void AWeepingAngelSurroundManager::SetAngelAssignment(AWeepingAngelCharacter* Angel, AWeepingAngelPath* AssignedPath)
 {
-	if (Angel == nullptr)
+	if (!IsValid(Angel))
 	{
 		return;
 	}
@@ -81,13 +81,13 @@ void AWeepingAngelSurroundManager::SetAngelAssignment(AWeepingAngelCharacter* An
 	Angel->SetAssignedApproachPath(AssignedPath);
 
 	AAIController* AIController = Cast<AAIController>(Angel->GetController());
-	if (AIController == nullptr)
+	if (!IsValid(AIController))
 	{
 		return;
 	}
 
 	UBlackboardComponent* Blackboard = AIController->GetBlackboardComponent();
-	if (Blackboard == nullptr)
+	if (!IsValid(Blackboard))
 	{
 		return;
 	}
@@ -105,7 +105,7 @@ void AWeepingAngelSurroundManager::SetAngelAssignment(AWeepingAngelCharacter* An
 // 두 통로 사이의 그래프 거리 계산
 float AWeepingAngelSurroundManager::GetGraphDistance(AWeepingAngelPath* StartPath, AWeepingAngelPath* GoalPath) const
 {
-	if (StartPath == nullptr || GoalPath == nullptr)
+	if (!IsValid(StartPath) || !IsValid(GoalPath))
 	{
 		return TNumericLimits<float>::Max();
 	}
@@ -128,7 +128,7 @@ float AWeepingAngelSurroundManager::GetGraphDistance(AWeepingAngelPath* StartPat
 		// 아직 방문하지 않은 Path 중 거리가 가장 가까운 Path 선택
 		for (const TPair<AWeepingAngelPath*, float>& Pair : Distances)
 		{
-			if (VisitedPaths.Contains(Pair.Key))
+			if (!IsValid(Pair.Key) || VisitedPaths.Contains(Pair.Key))
 			{
 				continue;
 			}
@@ -141,7 +141,7 @@ float AWeepingAngelSurroundManager::GetGraphDistance(AWeepingAngelPath* StartPat
 		}
 
 		// 더 이상 방문 가능한 Path가 없음
-		if (CurrentPath == nullptr)
+		if (!IsValid(CurrentPath))
 		{
 			break;
 		}
@@ -159,7 +159,7 @@ float AWeepingAngelSurroundManager::GetGraphDistance(AWeepingAngelPath* StartPat
 		for (const TObjectPtr<AWeepingAngelPath>& ConnectedPathPointer : ConnectedPaths)
 		{
 			AWeepingAngelPath* ConnectedPath = ConnectedPathPointer.Get();
-			if (ConnectedPath == nullptr)
+			if (!IsValid(ConnectedPath))
 			{
 				continue;
 			}
@@ -187,7 +187,7 @@ float AWeepingAngelSurroundManager::GetGraphDistance(AWeepingAngelPath* StartPat
 void AWeepingAngelSurroundManager::UpdateAssignments()
 {
 	APawn* PlayerPawn = UGameplayStatics::GetPlayerPawn(GetWorld(), 0);
-	if (PlayerPawn == nullptr)
+	if (!IsValid(PlayerPawn))
 	{
 		return;
 	}
@@ -204,10 +204,19 @@ void AWeepingAngelSurroundManager::UpdateAssignments()
 	for (AActor* AngelActor : AngelActors)
 	{
 		AWeepingAngelCharacter* Angel = Cast<AWeepingAngelCharacter>(AngelActor);
-		if (Angel == nullptr)
+		if (!IsValid(Angel))
 		{
-			return;
+			continue;
 		}
+
+        // Direct chasers no longer consume entrance capacity or get reassigned behind the player.
+        AAIController* Controller = Cast<AAIController>(Angel->GetController());
+        UBlackboardComponent* Blackboard = IsValid(Controller) ? Controller->GetBlackboardComponent() : nullptr;
+        if (IsAngelChasing(Angel) && IsValid(Blackboard) &&
+            Blackboard->GetValueAsBool(TEXT("CanDirectChase")))
+        {
+            continue;
+        }
 
 		if (IsAngelChasing(Angel))
 		{
@@ -249,7 +258,7 @@ void AWeepingAngelSurroundManager::UpdateAssignments()
 	for (AActor* PathActor : PathActors)
 	{
 		AWeepingAngelPath* Path = Cast<AWeepingAngelPath>(PathActor);
-		if (Path == nullptr)
+		if (!IsValid(Path))
 		{
 			continue;
 		}
@@ -300,7 +309,7 @@ void AWeepingAngelSurroundManager::UpdateAssignments()
 	for (const TObjectPtr<AWeepingAngelPath>& ConnectedPathPointer : ConnectedPlayerPaths)
 	{
 		AWeepingAngelPath* ConnectedPath = ConnectedPathPointer.Get();
-		if (ConnectedPath == nullptr)
+		if (!IsValid(ConnectedPath))
 		{
 			continue;
 		}
@@ -317,7 +326,8 @@ void AWeepingAngelSurroundManager::UpdateAssignments()
 	// 플레이어가 모든 연결 통로를 보고 있는 경우
 	if (AvailableEntrances.Num() == 0)
 	{
-		return;
+        // Replace stale assignments with the player's current corridor.
+        AvailableEntrances.Add(PlayerCurrentPath.Get());
 	}
 
 	// 플레이어에게 가까운 입구 순서로 정렬
@@ -329,6 +339,22 @@ void AWeepingAngelSurroundManager::UpdateAssignments()
 	);
 
 	// 입구별 천사 정원 계산
+    // Cache each angel/entrance distance once per assignment update.
+    TMap<AWeepingAngelCharacter*, TMap<AWeepingAngelPath*, float>> RouteCosts;
+    TMap<AWeepingAngelCharacter*, float> CheapestCosts;
+    for (AWeepingAngelCharacter* Angel : ChasingAngels)
+    {
+        TMap<AWeepingAngelPath*, float>& Costs = RouteCosts.Add(Angel);
+        float Cheapest = TNumericLimits<float>::Max();
+        for (AWeepingAngelPath* Entrance : AvailableEntrances)
+        {
+            const float Cost = GetGraphDistance(Angel->GetCurrentPath(), Entrance);
+            Costs.Add(Entrance, Cost);
+            Cheapest = FMath::Min(Cheapest, Cost);
+        }
+        CheapestCosts.Add(Angel, Cheapest);
+    }
+
 	struct FEntranceAllocation
 	{
 		AWeepingAngelPath* Path = nullptr;
@@ -371,13 +397,13 @@ void AWeepingAngelSurroundManager::UpdateAssignments()
 		for (int32 AngelIndex = 0; AngelIndex < UnassignedAngels.Num(); ++AngelIndex)
 		{
 			AWeepingAngelCharacter* Angel = UnassignedAngels[AngelIndex];
-			if (Angel == nullptr)
+			if (!IsValid(Angel))
 			{
 				continue;
 			}
 
 			AWeepingAngelPath* CurrentPath = Angel->GetCurrentPath();
-			if (CurrentPath == nullptr)
+			if (!IsValid(CurrentPath))
 			{
 				continue;
 			}
@@ -398,7 +424,13 @@ void AWeepingAngelSurroundManager::UpdateAssignments()
 				}
 
 				// 천사의 CurrentPath에서 입구까지의 그래프 거리
-				float Score = GetGraphDistance(CurrentPath, Allocation.Path);
+				float Score = RouteCosts.FindChecked(Angel).FindChecked(Allocation.Path);
+                // Capacity and retention bonuses must not force an excessive detour.
+                const float Cheapest = CheapestCosts.FindChecked(Angel);
+                if (Score > Cheapest + FMath::Max(300.0f, Cheapest * 0.25f))
+                {
+                    continue;
+                }
 
 				// 해당 입구까지 연결된 경로가 없음
 				if (Score == TNumericLimits<float>::Max())
@@ -446,15 +478,16 @@ void AWeepingAngelSurroundManager::UpdateAssignments()
 	// 이 단계에서는 정원보다 AI가 멈추지 않는 것을 우선한다.
 	for (AWeepingAngelCharacter* Angel : UnassignedAngels)
 	{
-		if (Angel == nullptr)
+		if (!IsValid(Angel))
 		{
 			continue;
 		}
 
 		AWeepingAngelPath* CurrentPath = Angel->GetCurrentPath();
 
-		if (CurrentPath == nullptr)
+		if (!IsValid(CurrentPath))
 		{
+            SetAngelAssignment(Angel, nullptr);
 			UE_LOG(
 				LogTemp,
 				Error,
@@ -476,7 +509,7 @@ void AWeepingAngelSurroundManager::UpdateAssignments()
 			}
 
 			const float GraphDistance =
-				GetGraphDistance(CurrentPath, Entrance);
+				RouteCosts.FindChecked(Angel).FindChecked(Entrance);
 
 			if (GraphDistance < BestFallbackDistance)
 			{
@@ -509,6 +542,7 @@ void AWeepingAngelSurroundManager::UpdateAssignments()
 
 			const bool bPreviousAssignmentReachable =
 				IsValid(PreviousAssignment) &&
+                AvailableEntrances.Contains(PreviousAssignment) &&
 				!PreviousAssignment->IsVisibleToPlayer() &&
 				GetGraphDistance(
 					CurrentPath,
