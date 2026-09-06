@@ -33,6 +33,10 @@ UBTService_WeepingAngel::UBTService_WeepingAngel()
     // 0.0f로 설정하여 Tick 간격에 랜덤한 지연이 발생하지 않도록 한다.
     // 따라서 매번 일정한 간격으로 Service가 실행된다.
     RandomDeviation = 0.0f;
+
+    // 시작할 때는 모두 서로를 볼 수 없기에 false 로 설정한다.
+    PlayerSeeAngel = false;
+    AngelSeePlayer = false;
 }
 
 void UBTService_WeepingAngel::TickNode(UBehaviorTreeComponent& OwnerComp, uint8* NodeMemory, float DeltaSeconds)
@@ -99,6 +103,13 @@ void UBTService_WeepingAngel::TickNode(UBehaviorTreeComponent& OwnerComp, uint8*
         return;
     }
 
+    // 천사의 AI 컨트롤러를 가져온다.
+    AAIController* AIController = OwnerComp.GetAIOwner();
+    if (AIController == nullptr)
+    {
+        return;
+    }
+
     // 천사의 캡슐 컴포넌트를 가져온다.
     UCapsuleComponent* AngelCapsule = Angel->GetCapsuleComponent();
     if (AngelCapsule == nullptr)
@@ -117,8 +128,8 @@ void UBTService_WeepingAngel::TickNode(UBehaviorTreeComponent& OwnerComp, uint8*
     const float DetectionMargin = 30.0f;
 
     // 캡슐의 판정 반지름과 높이에 여유를 추가한다.
-    float DetectionRadius = Radius + DetectionMargin;           // 사용하려면 해도 좋다.
-    float DetectionHalfHeight = HalfHeight + DetectionMargin;   // 높이는 굳이 사용할 필요가 없을 것 같다. 사용하려면 해도 좋다.
+    const float DetectionRadius = Radius + DetectionMargin;           // 사용하려면 해도 좋다.
+    const float DetectionHalfHeight = HalfHeight + DetectionMargin;   // 높이는 굳이 사용할 필요가 없을 것 같다. 사용하려면 해도 좋다.
 
     // 캡슐의 방향을 가져온다.
     FVector Up = AngelCapsule->GetUpVector();
@@ -177,9 +188,13 @@ void UBTService_WeepingAngel::TickNode(UBehaviorTreeComponent& OwnerComp, uint8*
     bool bInScreen = false;
 
     // 현재 화면의 크기를 가져옴
-    int32 SizeX;
-    int32 SizeY;
+    int32 SizeX = 0;
+    int32 SizeY = 0;
     PlayerController->GetViewportSize(SizeX, SizeY);
+    if (SizeX <= 0 || SizeY <= 0)
+    {
+        return;
+    }
 
     // 화면의 15%를 여유 공간으로 설정
     const float ScreenMarginRaito = 0.15f;
@@ -267,16 +282,95 @@ void UBTService_WeepingAngel::TickNode(UBehaviorTreeComponent& OwnerComp, uint8*
         }
     }
 
+    // 실제 신체 노출과 정지용 여유 영역을 구분한다.
+    // 여유 영역만 보였다고 최초 발견/추격을 시작하지 않는다.
+    const bool bBodyVisible = bInScreen;
+    if (!bInScreen)
+    {
+        TArray<FVector> GuardPoints;
+        const FVector GuardDirections[] =
+        {
+            Right, -Right, Forward, -Forward,
+            (Right + Forward).GetSafeNormal(),
+            (Right - Forward).GetSafeNormal(),
+            (-Right + Forward).GetSafeNormal(),
+            (-Right - Forward).GetSafeNormal()
+        };
+        const float CylinderHalfHeight = FMath::Max(HalfHeight - Radius, 0.0f);
+        const float GuardHeights[] = { -CylinderHalfHeight, 0.0f, CylinderHalfHeight };
+        for (const float Height : GuardHeights)
+        {
+            for (const FVector& Direction : GuardDirections)
+            {
+                GuardPoints.Add(CapsuleCenter + Up * Height + Direction * DetectionRadius);
+            }
+        }
+        GuardPoints.Add(CapsuleCenter + Up * DetectionHalfHeight);
+        GuardPoints.Add(CapsuleCenter - Up * DetectionHalfHeight);
+
+        // 캡슐 밖으로 움직이는 손발에도 수평 여유를 둔다.
+        for (const FName& BoneName : BoneNames)
+        {
+            if (AngelMesh->GetBoneIndex(BoneName) != INDEX_NONE)
+            {
+                const FVector BoneLocation = AngelMesh->GetBoneLocation(BoneName);
+                GuardPoints.Add(BoneLocation + Right * DetectionMargin);
+                GuardPoints.Add(BoneLocation - Right * DetectionMargin);
+                GuardPoints.Add(BoneLocation + Forward * DetectionMargin);
+                GuardPoints.Add(BoneLocation - Forward * DetectionMargin);
+            }
+        }
+
+        FCollisionQueryParams GuardQueryParams;
+        GuardQueryParams.AddIgnoredActor(PlayerPawn);
+        GuardQueryParams.AddIgnoredActor(Angel);
+        TArray<AActor*> GuardIgnoredAngels;
+        UGameplayStatics::GetAllActorsOfClass(GetWorld(), AWeepingAngelCharacter::StaticClass(), GuardIgnoredAngels);
+        for (AActor* OtherAngel : GuardIgnoredAngels)
+        {
+            if (IsValid(OtherAngel))
+            {
+                GuardQueryParams.AddIgnoredActor(OtherAngel);
+            }
+        }
+
+        for (const FVector& GuardPoint : GuardPoints)
+        {
+            FVector2D GuardScreenPosition;
+            if (!PlayerController->ProjectWorldLocationToScreen(GuardPoint, GuardScreenPosition))
+            {
+                continue;
+            }
+            if (GuardScreenPosition.X < -MarginX || GuardScreenPosition.X > SizeX + MarginX ||
+                GuardScreenPosition.Y < -MarginY || GuardScreenPosition.Y > SizeY + MarginY)
+            {
+                continue;
+            }
+
+            FHitResult GuardHit;
+            // 가상 검사점에는 충돌체가 없으므로 가로막는 물체가 없는지 확인한다.
+            const bool bGuardBlocked = GetWorld()->LineTraceSingleByChannel(
+                GuardHit, CameraLocation, GuardPoint, ECC_GameTraceChannel1, GuardQueryParams);
+            if (!bGuardBlocked)
+            {
+                bInScreen = true;
+                break;
+            }
+        }
+    }
+
     // 플레이어가 현재 천사를 바라보고 있는지 여부를 Blackboard의 PlayerLookingAtAngel Key에 저장한다.
     // bInScreen이 true라면 천사가 현재 화면의 판정 범위 안에 있다는 의미이고, false라면 천사가 화면의 판정 범위 밖에 있다는 의미이다.
     Blackboard->SetValueAsBool(TEXT("PlayerLookingAtAngel"), bInScreen);
 
     if (bInScreen)
     {
-        // 플레이어가 천사를 보고 있으므로 AI의 이동을 즉시 중단한다.
-        OwnerComp.GetAIOwner()->StopMovement();
+        // 정지용 여유 영역이 보이는 순간 현재 이동 요청을 중단한다.
+        AIController->StopMovement();
         // 현재 재생 중인 애니메이션을 현재 프레임에서 그대로 정지한다.
         Angel->SetFrozen(true);
+
+        PlayerSeeAngel = PlayerSeeAngel || bBodyVisible;
     }
     else
     {
@@ -319,8 +413,14 @@ void UBTService_WeepingAngel::TickNode(UBehaviorTreeComponent& OwnerComp, uint8*
         QueryParams
     );
 
-    // Line Trace가 플레이어에 도달했다면 플레이어를 추적 대상으로 설정한다.
+    // Line Trace가 플레이어에게 도달했다면 발견한 것으로 판단한다.
     if (bHit && HitResult.GetActor() == PlayerPawn)
+    {
+        AngelSeePlayer = true;
+    }
+
+    // Line Trace가 플레이어에 도달했다면 플레이어를 추적 대상으로 설정한다.
+    if (PlayerSeeAngel && AngelSeePlayer)
     {
         // Blackboard에 플레이어를 추적 대상으로 저장한다.
         Blackboard->SetValueAsObject(TEXT("TargetActor"), PlayerPawn);
