@@ -22,6 +22,7 @@ public:
 protected:
 	// Called when the game starts or when spawned
 	virtual void BeginPlay() override;
+    virtual void EndPlay(const EEndPlayReason::Type EndPlayReason) override;
 
 public:	
 	// Called every frame
@@ -31,6 +32,25 @@ public:
 	virtual void SetupPlayerInputComponent(class UInputComponent* PlayerInputComponent) override;
 
 private:
+#if WITH_EDITORONLY_DATA
+    // PIE 표시 화면만 탑뷰로 전환한다. AI 시야 카메라는 변경하지 않는다.
+    UPROPERTY(VisibleInstanceOnly, Transient, Category = "Debug|Top View")
+    bool bUseTopViewInPIE = false;
+
+    UPROPERTY(EditDefaultsOnly, Category = "Input")
+    TObjectPtr<UInputAction> IA_Player_DebugCamera;
+
+    UPROPERTY(VisibleAnywhere, Category = "Debug|Top View")
+    TObjectPtr<class UCameraComponent> DebugTopViewCamera;
+#endif
+
+#if WITH_EDITOR
+    friend class FProjectProject01TopViewExtension;
+    void ToggleDebugCamera();
+    TSharedPtr<class FProjectProject01TopViewExtension, ESPMode::ThreadSafe> TopViewExtension;
+#endif
+
+
 	UPROPERTY(VisibleAnywhere, Category = "Component")
 	class USpringArmComponent* SpringArm;
 	UPROPERTY(VisibleAnywhere, Category = "Component")
