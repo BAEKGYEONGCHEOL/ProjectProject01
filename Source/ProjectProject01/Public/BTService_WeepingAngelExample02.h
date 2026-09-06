@@ -25,6 +25,7 @@ protected:
 private:
 	// Visibility still updates every tick; expensive route queries run at 5 Hz.
 	float RouteUpdateTimeRemaining = 0.0f;
+    bool bReportedRouteFailure = false;
 
 	// 플레이어의 화면에 천사가 확인이 되었는지 여부를 저장한다.
 	bool PlayerSeeAngel;

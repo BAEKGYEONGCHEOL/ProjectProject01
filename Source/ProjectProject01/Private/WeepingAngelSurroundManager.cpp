@@ -105,10 +105,11 @@ void AWeepingAngelSurroundManager::SetAngelAssignment(AWeepingAngelCharacter* An
 // 두 통로 사이의 그래프 거리 계산
 float AWeepingAngelSurroundManager::GetTraversalCost(AWeepingAngelPath* FromPath, AWeepingAngelPath* ToPath) const
 {
-    if (!IsValid(FromPath) || !IsValid(ToPath) || ToPath->IsVisibleToPlayer())
+    if (!IsValid(FromPath) || !IsValid(ToPath))
     {
         return TNumericLimits<float>::Max();
     }
+    // Visibility is a finite cost, not a broken graph edge. Actual body visibility stops movement.
     // Convert the existing dimensionless path weight to a distance penalty (100 cm per unit).
     return FVector::Dist2D(FromPath->GetAngelPathLocation(), ToPath->GetAngelPathLocation()) +
         FMath::Max(0.0f, ToPath->GetWeight()) * 100.0f;
@@ -227,7 +228,7 @@ void AWeepingAngelSurroundManager::UpdateAssignments()
         AAIController* Controller = Cast<AAIController>(Angel->GetController());
         UBlackboardComponent* Blackboard = IsValid(Controller) ? Controller->GetBlackboardComponent() : nullptr;
         if (IsAngelChasing(Angel) && IsValid(Blackboard) &&
-            Blackboard->GetValueAsBool(TEXT("CanDirectChase")))
+            (Blackboard->GetValueAsBool(TEXT("CanDirectChase")) || Angel->IsFollowingApproachSegment()))
         {
             continue;
         }
@@ -340,12 +341,18 @@ void AWeepingAngelSurroundManager::UpdateAssignments()
 	// 플레이어가 모든 연결 통로를 보고 있는 경우
 	if (AvailableEntrances.Num() == 0)
 	{
-        // No hidden entrance: wait for a new assignment instead of bypassing surround behavior.
-        for (AWeepingAngelCharacter* Angel : ChasingAngels)
+        // Prefer hidden entrances, but keep navigation possible when every marker is visible.
+        for (const TObjectPtr<AWeepingAngelPath>& Path : ConnectedPlayerPaths)
         {
-            SetAngelAssignment(Angel, nullptr);
+            if (IsValid(Path.Get()))
+            {
+                AvailableEntrances.AddUnique(Path.Get());
+            }
         }
-        return;
+        if (AvailableEntrances.Num() == 0)
+        {
+            AvailableEntrances.Add(PlayerCurrentPath.Get());
+        }
 	}
 
 	// 플레이어에게 가까운 입구 순서로 정렬
@@ -357,6 +364,21 @@ void AWeepingAngelSurroundManager::UpdateAssignments()
 	);
 
 	// 입구별 천사 정원 계산
+    // Angels that completed a still-relevant entrance are approaching the player from that side.
+    // Do not repeatedly assign their current entrance or send them to another side.
+    for (int32 Index = ChasingAngels.Num() - 1; Index >= 0; --Index)
+    {
+        AWeepingAngelCharacter* Angel = ChasingAngels[Index];
+        if (Angel->HasReachedApproachPath() && AvailableEntrances.Contains(Angel->GetAssignedApproachPath()))
+        {
+            ChasingAngels.RemoveAtSwap(Index);
+        }
+    }
+    if (ChasingAngels.Num() == 0)
+    {
+        return;
+    }
+
     // Cache each angel/entrance distance once per assignment update.
     TMap<AWeepingAngelCharacter*, TMap<AWeepingAngelPath*, float>> RouteCosts;
     TMap<AWeepingAngelCharacter*, float> CheapestCosts;

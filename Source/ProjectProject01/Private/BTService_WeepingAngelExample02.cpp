@@ -18,11 +18,48 @@
 
 #include "NavigationSystem.h"
 #include "NavigationPath.h"
+#include "Navigation/PathFollowingComponent.h"
 #include "WeepingAngelPath.h"
 
 #include "WeepingAngelSurroundManager.h"
 #include "Engine/World.h"
 
+
+namespace
+{
+    bool CanUseAngelDirectChase(bool bCompleteRoute, double Distance, double RouteLength, bool bWasDirect)
+    {
+        const double Limit = bWasDirect ? 1600.0 : 1200.0;
+        return bCompleteRoute && Distance <= Limit && RouteLength <= Limit;
+    }
+
+    bool GetAngelApproachSegment(const TArray<FVector>& Points, FVector& OutLocation)
+    {
+        if (Points.Num() < 2)
+        {
+            return false;
+        }
+        // Follow the navigation polyline for at most 6 m, rather than cutting straight across a corner.
+        double Remaining = 600.0;
+        for (int32 Index = 1; Index < Points.Num(); ++Index)
+        {
+            const FVector Delta = Points[Index] - Points[Index - 1];
+            const double Length = Delta.Size();
+            if (Length <= UE_SMALL_NUMBER)
+            {
+                continue;
+            }
+            if (Length >= Remaining)
+            {
+                OutLocation = Points[Index - 1] + Delta * (Remaining / Length);
+                return true;
+            }
+            Remaining -= Length;
+        }
+        OutLocation = Points.Last();
+        return Remaining < 600.0;
+    }
+}
 
 UBTService_WeepingAngelExample02::UBTService_WeepingAngelExample02()
 {
@@ -485,8 +522,6 @@ void UBTService_WeepingAngelExample02::TickNode(UBehaviorTreeComponent& OwnerCom
     AWeepingAngelPath* AssignedApproachPath = Angel->GetAssignedApproachPath();
     const bool bHasAssignment = IsValid(AssignedApproachPath);
     const float DistanceToPlayer = FVector::Dist(AngelLocation, PlayerLocation);
-    const bool bReachedAssignedApproach = bHasAssignment &&
-        FVector::Dist(AngelLocation, AssignedApproachPath->GetAngelPathLocation()) <= 300.0f;
 
     // Query on the game thread and consume the temporary UObject immediately.
     // A short distance through a wall is not proof of a short navigable route.
@@ -496,13 +531,13 @@ void UBTService_WeepingAngelExample02::TickNode(UBehaviorTreeComponent& OwnerCom
         PlayerRoute->IsValid() && !PlayerRoute->IsPartial();
     const double PlayerRouteLength = bHasPlayerRoute ?
         PlayerRoute->GetPathLength() : TNumericLimits<double>::Max();
-    const double DirectChaseDistance = bWasDirectChasing ? 1600.0 : 1200.0;
 
     auto SetDirectChase = [&](bool bEnabled)
     {
         if (bEnabled != bWasDirectChasing)
         {
             AIController->StopMovement();
+            Angel->SetFollowingApproachSegment(false);
             Blackboard->ClearValue(TEXT("NextPath"));
             Blackboard->ClearValue(TEXT("NextPathLocation"));
             UE_LOG(LogTemp, Log, TEXT("Angel chase mode: %s Direct=%d RouteLength=%.0f"),
@@ -512,26 +547,26 @@ void UBTService_WeepingAngelExample02::TickNode(UBehaviorTreeComponent& OwnerCom
     };
 
     // Only proximity through a complete navigation route permits direct chase.
-    const bool bCanDirectChase = bHasPlayerRoute &&
-        DistanceToPlayer <= DirectChaseDistance &&
-        PlayerRouteLength <= DirectChaseDistance;
+    const bool bCanDirectChase = CanUseAngelDirectChase(
+        bHasPlayerRoute, DistanceToPlayer, PlayerRouteLength, bWasDirectChasing);
     if (bCanDirectChase)
     {
         SetDirectChase(true);
+        bReportedRouteFailure = false;
         return;
     }
     SetDirectChase(false);
 
     // 직접 추격이 끝난 순간 CurrentPath 재설정
     // Re-anchor when the direct navigation route no longer satisfies chase conditions.
-    if (bWasDirectChasing && !bCanDirectChase)
+    if (bWasDirectChasing || !IsValid(Angel->GetCurrentPath()))
     {
         TArray<AActor*> PathActors;
 
         UGameplayStatics::GetAllActorsOfClass(GetWorld(), AWeepingAngelPath::StaticClass(), PathActors);
 
         AWeepingAngelPath* ClosestPath = nullptr;
-        float ClosestDistanceSquared = TNumericLimits<float>::Max();
+        float ClosestRouteLength = TNumericLimits<float>::Max();
 
         for (AActor* PathActor : PathActors)
         {
@@ -541,11 +576,17 @@ void UBTService_WeepingAngelExample02::TickNode(UBehaviorTreeComponent& OwnerCom
                 continue;
             }
 
-            const float DistanceSquared = FVector::DistSquared2D(AngelLocation, Path->GetAngelPathLocation());
-
-            if (DistanceSquared < ClosestDistanceSquared)
+            UNavigationPath* AnchorRoute = UNavigationSystemV1::FindPathToLocationSynchronously(
+                GetWorld(), Angel->GetNavAgentLocation(), Path->GetAngelPathLocation(), Angel);
+            if (!IsValid(AnchorRoute) || !AnchorRoute->IsValid() || AnchorRoute->IsPartial())
             {
-                ClosestDistanceSquared = DistanceSquared;
+                continue;
+            }
+            const float AnchorRouteLength = static_cast<float>(AnchorRoute->GetPathLength());
+
+            if (AnchorRouteLength < ClosestRouteLength)
+            {
+                ClosestRouteLength = AnchorRouteLength;
                 ClosestPath = Path;
             }
         }
@@ -582,84 +623,145 @@ void UBTService_WeepingAngelExample02::TickNode(UBehaviorTreeComponent& OwnerCom
     AWeepingAngelPath* CurrentPath = Angel->GetCurrentPath();
     AWeepingAngelPath* CurrentNextPath =
         Cast<AWeepingAngelPath>(Blackboard->GetValueAsObject(TEXT("NextPath")));
-    // Finish the active corridor leg before accepting a new manager assignment.
-    // Otherwise a non-observing MoveTo may finish the old vector but commit the new NextPath.
-    if (bHasAssignment && !AssignedApproachPath->IsVisibleToPlayer() &&
-        IsValid(CurrentPath) && IsValid(CurrentNextPath) && !CurrentNextPath->IsVisibleToPlayer() &&
-        CurrentPath != CurrentNextPath && CurrentPath->GetConnectedPaths().Contains(CurrentNextPath))
+    // Preserve both graph legs and finite approach segments until the arrival task completes them.
+    if (bHasAssignment && IsValid(CurrentNextPath) && Blackboard->IsVectorValueSet(TEXT("NextPathLocation")) &&
+        (Angel->IsFollowingApproachSegment() || CurrentNextPath == AssignedApproachPath ||
+            (IsValid(CurrentPath) && CurrentPath->GetConnectedPaths().Contains(CurrentNextPath))))
     {
         return;
     }
 
     if (IsValid(CurrentNextPath))
     {
-        // A newly exposed leg must be cancelled before replacing its destination.
         AIController->StopMovement();
         Blackboard->ClearValue(TEXT("NextPath"));
         Blackboard->ClearValue(TEXT("NextPathLocation"));
-        CurrentNextPath = nullptr;
+    }
+    Angel->SetFollowingApproachSegment(false);
+
+    // A nearest marker assigned at startup is not necessarily a marker actually reached.
+    UPathFollowingComponent* Following = AIController->GetPathFollowingComponent();
+    if (bHasAssignment && !Angel->HasReachedApproachPath() && IsValid(Following) &&
+        Following->HasReached(AssignedApproachPath->GetAngelPathLocation(),
+            EPathFollowingReachMode::OverlapAgent, 100.0f))
+    {
+        Angel->SetCurrentPath(AssignedApproachPath);
+        Blackboard->SetValueAsObject(TEXT("CurrentPath"), AssignedApproachPath);
+        Angel->SetApproachPathReached(true);
+        CurrentPath = AssignedApproachPath;
     }
 
     AWeepingAngelPath* BestPath = nullptr;
-    float BestScore = TNumericLimits<float>::Max();
+    FVector BestLocation = FVector::ZeroVector;
+    bool bApproachSegment = false;
 
-    if (IsValid(CurrentPath) && bHasAssignment && IsValid(SurroundManager) &&
-        !AssignedApproachPath->IsVisibleToPlayer() &&
-        CurrentPath != AssignedApproachPath && !bReachedAssignedApproach)
+    if (bHasAssignment && Angel->HasReachedApproachPath())
     {
+        // Completing the entrance is a transition, not a terminal wait.
+        // Keep CanDirectChase false while taking finite navigation steps from the allocated side.
+        if (bHasPlayerRoute && GetAngelApproachSegment(PlayerRoute->PathPoints, BestLocation))
+        {
+            BestPath = AssignedApproachPath; // Route anchor; arrival task must not commit it as a new corridor.
+            bApproachSegment = true;
+        }
+    }
+    else if (bHasAssignment && IsValid(CurrentPath) && IsValid(SurroundManager))
+    {
+        float BestScore = TNumericLimits<float>::Max();
         const float CurrentDistance = SurroundManager->GetGraphDistance(CurrentPath, AssignedApproachPath);
         for (const TObjectPtr<AWeepingAngelPath>& Candidate : CurrentPath->GetConnectedPaths())
         {
             AWeepingAngelPath* Path = Candidate.Get();
-            if (!IsValid(Path) || Path == CurrentPath || Path->IsVisibleToPlayer())
+            if (!IsValid(Path) || Path == CurrentPath)
             {
                 continue;
             }
             const float RemainingDistance = SurroundManager->GetGraphDistance(Path, AssignedApproachPath);
-            // Strict progress prevents A -> B -> A when the goal stays fixed.
             if (RemainingDistance == TNumericLimits<float>::Max() || RemainingDistance >= CurrentDistance)
             {
                 continue;
             }
             const float Score = SurroundManager->GetTraversalCost(CurrentPath, Path) + RemainingDistance;
-            // Use the same nonnegative weight for allocation and next-hop selection.
-            if (Score < BestScore || (Score == BestScore && Path == CurrentNextPath))
+            if (Score < BestScore)
             {
+                UNavigationPath* LegRoute = UNavigationSystemV1::FindPathToLocationSynchronously(
+                    GetWorld(), Angel->GetNavAgentLocation(), Path->GetAngelPathLocation(), Angel);
+                if (!IsValid(LegRoute) || !LegRoute->IsValid() || LegRoute->IsPartial())
+                {
+                    continue;
+                }
                 BestScore = Score;
                 BestPath = Path;
             }
+        }
+        if (IsValid(BestPath))
+        {
+            BestLocation = BestPath->GetAngelPathLocation();
+        }
+    }
+
+    if (!IsValid(BestPath) && bHasAssignment && !Angel->HasReachedApproachPath())
+    {
+        // Recover a missing graph link by navigating to the allocated entrance, never to TargetActor.
+        UNavigationPath* EntranceRoute = UNavigationSystemV1::FindPathToLocationSynchronously(
+            GetWorld(), Angel->GetNavAgentLocation(), AssignedApproachPath->GetAngelPathLocation(), Angel);
+        if (IsValid(EntranceRoute) && EntranceRoute->IsValid() && !EntranceRoute->IsPartial())
+        {
+            BestPath = AssignedApproachPath;
+            BestLocation = AssignedApproachPath->GetAngelPathLocation();
         }
     }
 
     if (!IsValid(BestPath))
     {
-        // Missing/blocked/finished corridor routes never override the direct-chase distance gate.
+        if (!bReportedRouteFailure)
+        {
+            UE_LOG(LogTemp, Warning,
+                TEXT("Angel route unavailable: Angel=%s Current=%s Assigned=%s Reached=%d PlayerRoute=%d Manager=%d"),
+                *Angel->GetName(), *GetNameSafe(CurrentPath), *GetNameSafe(AssignedApproachPath),
+                Angel->HasReachedApproachPath(), bHasPlayerRoute, IsValid(SurroundManager));
+            bReportedRouteFailure = true;
+        }
         Blackboard->ClearValue(TEXT("NextPath"));
         Blackboard->ClearValue(TEXT("NextPathLocation"));
         AIController->StopMovement();
         return;
     }
 
-    // NextPath가 변경되었을 때만 갱신
-    if (CurrentNextPath != BestPath)
-    {
-        // 새로운 NextPath
-        Blackboard->SetValueAsObject(TEXT("NextPath"), BestPath);
-
-        // 새로운 이동 위치
-        Blackboard->SetValueAsVector(TEXT("NextPathLocation"), BestPath->GetAngelPathLocation());
-
-        UE_LOG(
-            LogTemp,
-            Warning,
-            TEXT(
-                "Angel Path Changed : %s -> %s"
-            ),
-            CurrentNextPath
-                ? *CurrentNextPath->GetName()
-                : TEXT("None"),
-
-            *BestPath->GetName()
-        );
-    }
+    bReportedRouteFailure = false;
+    Angel->SetFollowingApproachSegment(bApproachSegment);
+    // Publish the vector before the object key that enables the MoveTo branch.
+    Blackboard->SetValueAsVector(TEXT("NextPathLocation"), BestLocation);
+    Blackboard->SetValueAsObject(TEXT("NextPath"), BestPath);
+    UE_LOG(LogTemp, Log, TEXT("Angel route: Angel=%s Assigned=%s Next=%s ApproachSegment=%d"),
+        *Angel->GetName(), *GetNameSafe(AssignedApproachPath), *BestPath->GetName(), bApproachSegment);
 }
+
+#if WITH_DEV_AUTOMATION_TESTS
+#include "Misc/AutomationTest.h"
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FWeepingAngelApproachRegression,
+    "ProjectProject01.AI.Routing.ApproachAfterEntrance",
+    EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FWeepingAngelApproachRegression::RunTest(const FString& Parameters)
+{
+    // At a completed entrance 30 m away: no direct chase, but a finite approach leg is available.
+    TestFalse(TEXT("Distant entrance never enables direct chase"), CanUseAngelDirectChase(true, 3000.0, 3000.0, false));
+    FVector End;
+    TestTrue(TEXT("Completed entrance has a next segment"),
+        GetAngelApproachSegment({ FVector::ZeroVector, FVector(3000.0, 0.0, 0.0) }, End));
+    TestEqual(TEXT("Approach advances 6 m"), End, FVector(600.0, 0.0, 0.0));
+    TestTrue(TEXT("Segment follows navigation corners"),
+        GetAngelApproachSegment({ FVector::ZeroVector, FVector(400.0, 0.0, 0.0), FVector(400.0, 1000.0, 0.0) }, End));
+    TestEqual(TEXT("No straight shortcut through the corner"), End, FVector(400.0, 200.0, 0.0));
+    TestFalse(TEXT("Empty route cannot create a destination"), GetAngelApproachSegment({}, End));
+    TestFalse(TEXT("Duplicate points cannot create a zero-length move"),
+        GetAngelApproachSegment({ FVector::ZeroVector, FVector::ZeroVector }, End));
+    TestTrue(TEXT("Near route enables chase"), CanUseAngelDirectChase(true, 1100.0, 1200.0, false));
+    TestTrue(TEXT("Chase hysteresis retains chase"), CanUseAngelDirectChase(true, 1400.0, 1500.0, true));
+    TestFalse(TEXT("Far route exits chase"), CanUseAngelDirectChase(true, 1700.0, 1700.0, true));
+    TestFalse(TEXT("Partial route cannot enable chase"), CanUseAngelDirectChase(false, 100.0, 100.0, true));
+    return true;
+}
+#endif

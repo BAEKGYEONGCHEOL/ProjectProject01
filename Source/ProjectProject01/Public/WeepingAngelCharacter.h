@@ -48,10 +48,23 @@ public:
 
 	void SetAssignedApproachPath(AWeepingAngelPath* NewPath)
 	{
+        if (AssignedApproachPath != NewPath)
+        {
+            bApproachPathReached = false;
+        }
 		AssignedApproachPath = NewPath;
 	}
 
+    bool HasReachedApproachPath() const { return bApproachPathReached; }
+    void SetApproachPathReached(bool bReached) { bApproachPathReached = bReached; }
+    bool IsFollowingApproachSegment() const { return bFollowingApproachSegment; }
+    void SetFollowingApproachSegment(bool bFollowing) { bFollowingApproachSegment = bFollowing; }
+
 private:
+    // Game-thread state shared by the service, manager and arrival task; no UObject ownership.
+    bool bApproachPathReached = false;
+    bool bFollowingApproachSegment = false;
+
 	// 천사가 현재 도착한 Path
 	UPROPERTY(EditAnywhere)
 	TObjectPtr<AWeepingAngelPath> CurrentPath;

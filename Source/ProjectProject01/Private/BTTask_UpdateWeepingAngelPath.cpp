@@ -47,36 +47,40 @@ EBTNodeResult::Type UBTTask_UpdateWeepingAngelPath::ExecuteTask(UBehaviorTreeCom
         return EBTNodeResult::Failed;
     }
 
+    const bool bApproachSegment = Angel->IsFollowingApproachSegment();
+    const FVector MoveDestination = Blackboard->GetValueAsVector(TEXT("NextPathLocation"));
+
     // MoveTo can report success at the end of a partial path.
     // Match the current BT MoveTo acceptance radius (100 cm + agent radius).
     UPathFollowingComponent* Following = AIController->GetPathFollowingComponent();
     if (Blackboard->GetValueAsBool(TEXT("CanDirectChase")) || !IsValid(Following) ||
-        !Following->HasReached(NextPath->GetAngelPathLocation(), EPathFollowingReachMode::OverlapAgent, 100.0f))
+        !Blackboard->IsVectorValueSet(TEXT("NextPathLocation")) ||
+        !Following->HasReached(MoveDestination, EPathFollowingReachMode::OverlapAgent, 100.0f) ||
+        (!bApproachSegment && !Following->HasReached(NextPath->GetAngelPathLocation(),
+            EPathFollowingReachMode::OverlapAgent, 100.0f)))
     {
         UE_LOG(LogTemp, Warning, TEXT("Ignoring unreached corridor: %s -> %s"),
             *Angel->GetName(), *NextPath->GetName());
+        Angel->SetFollowingApproachSegment(false);
         Blackboard->ClearValue(TEXT("NextPath"));
         Blackboard->ClearValue(TEXT("NextPathLocation"));
         return EBTNodeResult::Failed;
     }
 
-    AWeepingAngelPath* PreviousPath = Angel->GetCurrentPath();
-
-    // Character의 CurrentPath 갱신
-    Angel->SetCurrentPath(NextPath);
-
-    // Blackboard의 CurrentPath도 함께 갱신
-    Blackboard->SetValueAsObject(TEXT("CurrentPath"), NextPath);
-
-    UE_LOG(
-        LogTemp,
-        Warning,
-        TEXT("CurrentPath Updated: %s -> %s"),
-        PreviousPath
-            ? *PreviousPath->GetName()
-            : TEXT("None"),
-        *NextPath->GetName()
-    );
+    Angel->SetFollowingApproachSegment(false);
+    if (!bApproachSegment)
+    {
+        AWeepingAngelPath* PreviousPath = Angel->GetCurrentPath();
+        Angel->SetCurrentPath(NextPath);
+        Blackboard->SetValueAsObject(TEXT("CurrentPath"), NextPath);
+        if (NextPath == Angel->GetAssignedApproachPath())
+        {
+            Angel->SetApproachPathReached(true);
+        }
+        UE_LOG(LogTemp, Log, TEXT("CurrentPath Updated: %s -> %s"),
+            *GetNameSafe(PreviousPath), *NextPath->GetName());
+    }
+    // An approach segment advances along NavMesh, without claiming a different corridor was reached.
 
     // 도착한 NextPath는 더 이상 다음 목적지가 아님
     Blackboard->ClearValue(TEXT("NextPath"));
