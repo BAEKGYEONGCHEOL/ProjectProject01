@@ -21,9 +21,33 @@ protected:
 	virtual void TickNode(UBehaviorTreeComponent& OwnerComp, uint8* NodeMemory, float DeltaSeconds) override;
 
 private:
-	// 플레이어의 화면에 Mannequin 이 확인이 되었는지 여부를 저장한다.
-	bool PlayerSeeMannequin;
+	bool TryFindRoamingDestination(
+		const FVector& MannequinLocation,
+		const FVector& PlayerLocation,
+		float InnerRadius,
+		float OuterRadius,
+		class APawn& MannequinPawn,
+		FVector& OutDestination) const;
+
+	void ClearRoamingState(class UBlackboardComponent& Blackboard);
+
+	UPROPERTY(EditAnywhere, Category = "AI|Roaming", meta = (ClampMin = "0.0", UIMin = "0.0", Units = "s"))
+	float MinRoamingWaitTime = 2.0f;
+
+	UPROPERTY(EditAnywhere, Category = "AI|Roaming", meta = (ClampMin = "0.0", UIMin = "0.0", Units = "s"))
+	float MaxRoamingWaitTime = 5.0f;
+
+	// 플레이어의 화면에 Mannequin 이 확인되었는지 저장한다.
+	bool PlayerSeeMannequin = false;
 
 	// Mannequin 이 플레이어를 발견했는지 저장한다.
-	bool MannequinSeePlayer;
+	bool MannequinSeePlayer = false;
+
+	FVector RoamingDestination = FVector::ZeroVector;
+	bool bHasRoamingDestination = false;
+	bool bWasInRoamingRange = false;
+	bool bLoggedRoamingQueryFailure = false;
+	bool bIsRoamingWaiting = false;
+	double NextRoamingQueryTime = 0.0;
+	double RoamingResumeTime = 0.0;
 };

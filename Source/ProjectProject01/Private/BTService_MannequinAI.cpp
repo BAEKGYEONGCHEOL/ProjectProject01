@@ -10,13 +10,18 @@
 #include "Camera/PlayerCameraManager.h"
 #include "MannequinAICharacter.h"
 
+#include "PlayerCharacter.h"
+#include "NavigationSystem.h"
+#include "NavigationData.h"
+
 #include "Components/CapsuleComponent.h"
 #include "Components/SkeletalMeshComponent.h"
-
 
 UBTService_MannequinAI::UBTService_MannequinAI()
 {
 	NodeName = TEXT("Mannequin AI Behavior");
+
+	bCreateNodeInstance = true;
 
     Interval = 0.0f;
     RandomDeviation = 0.0f;
@@ -25,13 +30,79 @@ UBTService_MannequinAI::UBTService_MannequinAI()
     MannequinSeePlayer = false;
 }
 
+bool UBTService_MannequinAI::TryFindRoamingDestination(
+    const FVector& MannequinLocation,
+    const FVector& PlayerLocation,
+    float InnerRadius,
+    float OuterRadius,
+    APawn& MannequinPawn,
+    FVector& OutDestination) const
+{
+    UWorld* World = GetWorld();
+    if (!IsValid(World) || OuterRadius <= InnerRadius)
+    {
+        return false;
+    }
+
+    UNavigationSystemV1* NavigationSystem = UNavigationSystemV1::GetCurrent(World);
+    if (!IsValid(NavigationSystem))
+    {
+        return false;
+    }
+
+    ANavigationData* NavigationData = NavigationSystem->GetNavDataForProps(
+        MannequinPawn.GetNavAgentPropertiesRef(), MannequinLocation);
+    if (!IsValid(NavigationData))
+    {
+        return false;
+    }
+
+    const double DistanceToPlayer = FVector::Dist2D(MannequinLocation, PlayerLocation);
+    const float SearchRadius = OuterRadius + static_cast<float>(DistanceToPlayer);
+    const double InnerRadiusSquared = FMath::Square(static_cast<double>(InnerRadius));
+    const double OuterRadiusSquared = FMath::Square(static_cast<double>(OuterRadius));
+
+    // NavMesh에서 현재 AI가 도달 가능한 점을 뽑고, 플레이어 중심의 고리 영역인지 재검사한다.
+    constexpr int32 MaxRandomPointAttempts = 16;
+    for (int32 Attempt = 0; Attempt < MaxRandomPointAttempts; ++Attempt)
+    {
+        FNavLocation Candidate;
+        if (!NavigationSystem->GetRandomReachablePointInRadius(
+                MannequinLocation, SearchRadius, Candidate, NavigationData))
+        {
+            continue;
+        }
+
+        const double CandidateDistanceSquared = FVector::DistSquared2D(Candidate.Location, PlayerLocation);
+        if (CandidateDistanceSquared > InnerRadiusSquared && CandidateDistanceSquared <= OuterRadiusSquared)
+        {
+            OutDestination = Candidate.Location;
+            return true;
+        }
+    }
+
+    return false;
+}
+
+void UBTService_MannequinAI::ClearRoamingState(UBlackboardComponent& Blackboard)
+{
+    bHasRoamingDestination = false;
+    bWasInRoamingRange = false;
+    bLoggedRoamingQueryFailure = false;
+    bIsRoamingWaiting = false;
+    NextRoamingQueryTime = 0.0;
+    RoamingResumeTime = 0.0;
+    Blackboard.ClearValue(TEXT("RoamingLocation"));
+}
+
 void UBTService_MannequinAI::TickNode(UBehaviorTreeComponent& OwnerComp, uint8* NodeMemory, float DeltaSeconds)
 {
 	Super::TickNode(OwnerComp, NodeMemory, DeltaSeconds);
 
     // 플레이어 캐릭터
     APawn* PlayerPawn = UGameplayStatics::GetPlayerPawn(GetWorld(), 0);
-    if (PlayerPawn == nullptr)
+    APlayerCharacter* PlayerCharacter = Cast<APlayerCharacter>(PlayerPawn);
+    if (!IsValid(PlayerCharacter))
     {
         return;
     }
@@ -341,6 +412,15 @@ void UBTService_MannequinAI::TickNode(UBehaviorTreeComponent& OwnerComp, uint8* 
     FVector MannequinLocation = Mannequin->GetActorLocation();
     FVector PlayerLocation = PlayerPawn->GetActorLocation();
 
+    const float DirectChaseRadius = PlayerCharacter->GetDirectChaseRadius();
+    const float RoamingOuterRadius = PlayerCharacter->GetRoamingOuterRadius();
+    const double PlayerDistanceSquared = FVector::DistSquared2D(MannequinLocation, PlayerLocation);
+    const bool bIsInsideInnerRange =
+        PlayerDistanceSquared <= FMath::Square(static_cast<double>(DirectChaseRadius));
+    const bool bIsBetweenPlayerRanges = !bIsInsideInnerRange &&
+        PlayerDistanceSquared <= FMath::Square(static_cast<double>(RoamingOuterRadius));
+    const bool bIsOutsideOuterRange = !bIsInsideInnerRange && !bIsBetweenPlayerRanges;
+
     // Line Trace의 충돌 정보를 저장할 변수이다.
     FHitResult HitResult;
 
@@ -378,15 +458,89 @@ void UBTService_MannequinAI::TickNode(UBehaviorTreeComponent& OwnerComp, uint8* 
         MannequinSeePlayer = true;
     }
 
-    // Line Trace가 플레이어에 도달했다면 플레이어를 추적 대상으로 설정한다.
-    if (PlayerSeeMannequin && MannequinSeePlayer)
+    const bool bMutuallyDetected = PlayerSeeMannequin && MannequinSeePlayer;
+    Blackboard->SetValueAsBool(TEXT("IsOutsideOuterRange"), bMutuallyDetected && bIsOutsideOuterRange);
+    Blackboard->SetValueAsBool(TEXT("IsBetweenPlayerRanges"), bMutuallyDetected && bIsBetweenPlayerRanges);
+    Blackboard->SetValueAsBool(TEXT("IsInsideInnerRange"), bMutuallyDetected && bIsInsideInnerRange);
+
+    if (!bMutuallyDetected)
     {
-        // Blackboard에 플레이어를 추적 대상으로 저장한다.
-        Blackboard->SetValueAsObject(TEXT("TargetActor"), PlayerPawn);
-    }
-    else
-    {
-        // 플레이어를 볼 수 없다면 추적 대상을 삭제한다.
         Blackboard->ClearValue(TEXT("TargetActor"));
+        ClearRoamingState(*Blackboard);
+        return;
     }
+
+    if (bIsInsideInnerRange || bIsOutsideOuterRange)
+    {
+        Blackboard->SetValueAsObject(TEXT("TargetActor"), PlayerPawn);
+        ClearRoamingState(*Blackboard);
+        return;
+    }
+
+    Blackboard->ClearValue(TEXT("TargetActor"));
+
+    const double CurrentTime = GetWorld()->GetTimeSeconds();
+    const double InnerRadiusSquared = FMath::Square(static_cast<double>(DirectChaseRadius));
+    const double OuterRadiusSquared = FMath::Square(static_cast<double>(RoamingOuterRadius));
+    const double DestinationDistanceSquared = bHasRoamingDestination
+        ? FVector::DistSquared2D(RoamingDestination, PlayerLocation)
+        : 0.0;
+    const bool bDestinationOutsideRing = bHasRoamingDestination &&
+        (DestinationDistanceSquared <= InnerRadiusSquared || DestinationDistanceSquared > OuterRadiusSquared);
+
+    if (!bWasInRoamingRange || bDestinationOutsideRing)
+    {
+        bHasRoamingDestination = false;
+        bIsRoamingWaiting = false;
+        RoamingResumeTime = 0.0;
+        Blackboard->ClearValue(TEXT("RoamingLocation"));
+    }
+
+    const bool bReachedDestination = bHasRoamingDestination &&
+        FVector::DistSquared2D(MannequinLocation, RoamingDestination) <= FMath::Square(100.0);
+    if (bReachedDestination && !bIsRoamingWaiting)
+    {
+        const float SafeMinWaitTime = FMath::Max(0.0f, MinRoamingWaitTime);
+        const float SafeMaxWaitTime = FMath::Max(SafeMinWaitTime, MaxRoamingWaitTime);
+        bIsRoamingWaiting = true;
+        RoamingResumeTime = CurrentTime + FMath::FRandRange(SafeMinWaitTime, SafeMaxWaitTime);
+    }
+
+    if (bIsRoamingWaiting && CurrentTime >= RoamingResumeTime)
+    {
+        bHasRoamingDestination = false;
+        bIsRoamingWaiting = false;
+        Blackboard->ClearValue(TEXT("RoamingLocation"));
+    }
+
+    if (!bHasRoamingDestination && !bIsRoamingWaiting && CurrentTime >= NextRoamingQueryTime)
+    {
+        bHasRoamingDestination = TryFindRoamingDestination(
+            MannequinLocation,
+            PlayerLocation,
+            DirectChaseRadius,
+            RoamingOuterRadius,
+            *MannequinPawn,
+            RoamingDestination);
+
+        if (bHasRoamingDestination)
+        {
+            bLoggedRoamingQueryFailure = false;
+            Blackboard->SetValueAsVector(TEXT("RoamingLocation"), RoamingDestination);
+        }
+        else
+        {
+            NextRoamingQueryTime = CurrentTime + 1.0;
+            Blackboard->ClearValue(TEXT("RoamingLocation"));
+            if (!bLoggedRoamingQueryFailure)
+            {
+                UE_LOG(LogTemp, Warning,
+                    TEXT("Mannequin roaming destination unavailable for %s: check NavMesh coverage and player range settings."),
+                    *GetNameSafe(MannequinPawn));
+                bLoggedRoamingQueryFailure = true;
+            }
+        }
+    }
+
+    bWasInRoamingRange = true;
 }
