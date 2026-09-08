@@ -22,7 +22,6 @@ public:
 protected:
 	// Called when the game starts or when spawned
 	virtual void BeginPlay() override;
-    virtual void EndPlay(const EEndPlayReason::Type EndPlayReason) override;
 
 public:	
 	// Called every frame
@@ -32,43 +31,12 @@ public:
 	virtual void SetupPlayerInputComponent(class UInputComponent* PlayerInputComponent) override;
 
 private:
-#if WITH_EDITORONLY_DATA
-    // PIE 표시 화면만 탑뷰로 전환한다. AI 시야 카메라는 변경하지 않는다.
-    UPROPERTY(VisibleInstanceOnly, Transient, Category = "Debug|Top View")
-    bool bUseTopViewInPIE = false;
-
-    UPROPERTY(EditDefaultsOnly, Category = "Input")
-    TObjectPtr<UInputAction> IA_Player_DebugCamera;
-
-    UPROPERTY(VisibleAnywhere, Category = "Debug|Top View")
-    TObjectPtr<class UCameraComponent> DebugTopViewCamera;
-#endif
-
-#if WITH_EDITOR
-    friend class FProjectProject01TopViewExtension;
-    void ToggleDebugCamera();
-    void RestoreDebugControls();
-    void UpdateDebugCursorAim();
-    TWeakObjectPtr<class APlayerController> DebugInputController;
-    FMatrix DebugClipToWorld = FMatrix::Identity;
-    FIntRect DebugViewRect = FIntRect(0, 0, 0, 0);
-    FRotator SavedControlRotation = FRotator::ZeroRotator;
-    FRotator SavedCameraRelativeRotation = FRotator::ZeroRotator;
-    bool bHasDebugView = false;
-    bool bDebugControlsActive = false;
-    bool bSkipNextLookInput = false;
-    bool bSavedUseControllerRotationYaw = false;
-    bool bSavedOrientRotationToMovement = false;
-    bool bSavedUseControllerDesiredRotation = false;
-    bool bSavedCameraUsePawnControlRotation = false;
-    TSharedPtr<class FProjectProject01TopViewExtension, ESPMode::ThreadSafe> TopViewExtension;
-#endif
-
-
 	UPROPERTY(VisibleAnywhere, Category = "Component")
 	class USpringArmComponent* SpringArm;
 	UPROPERTY(VisibleAnywhere, Category = "Component")
 	class UCameraComponent* Camera;
+    UPROPERTY(VisibleAnywhere, Category = "Component")
+    class UCameraComponent* DebugCamera;
 
 	UPROPERTY(EditDefaultsOnly, Category = "Input")
 	UInputMappingContext* IMC_PlayerInput;
@@ -77,8 +45,15 @@ private:
 	UInputAction* IA_Move;
 	UPROPERTY(EditDefaultsOnly, Category = "Input")
 	UInputAction* IA_Look;
+    UPROPERTY(EditDefaultsOnly, Category = "Input")
+    UInputAction* IA_DebugCamera;
+
+    bool bDebugMode = false;
 
 	// 입력 이벤트 발생 시 실행할 함수
 	void Move(const FInputActionValue& Value);
 	void Look(const FInputActionValue& Value);
+    
+    void ToggleDebugCamera();
+    void UpdateDebugAim();
 };
