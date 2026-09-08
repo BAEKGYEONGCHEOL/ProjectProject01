@@ -56,6 +56,14 @@
 		"directory": "D:\\Epic Games\\UE_5.8\\Engine\\Source"
 	},
 	{
+		"file": "D:\\Unreal_Engine_Project_Practice\\ProjectProject01\\Source\\ProjectProject01\\Private\\MannequinAIController.cpp",
+		"arguments": [
+			"C:\\Program Files\\Microsoft Visual Studio\\2022\\Community\\VC\\Tools\\MSVC\\14.44.35207\\bin\\Hostx64\\x64\\cl.exe",
+			"@D:\\Unreal_Engine_Project_Practice\\ProjectProject01\\.vscode\\compileCommands_Default\\ProjectProject01.0.rsp"
+		],
+		"directory": "D:\\Epic Games\\UE_5.8\\Engine\\Source"
+	},
+	{
 		"file": "D:\\Unreal_Engine_Project_Practice\\ProjectProject01\\Source\\ProjectProject01\\Private\\PlayerCharacter.cpp",
 		"arguments": [
 			"C:\\Program Files\\Microsoft Visual Studio\\2022\\Community\\VC\\Tools\\MSVC\\14.44.35207\\bin\\Hostx64\\x64\\cl.exe",
