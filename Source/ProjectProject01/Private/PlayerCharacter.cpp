@@ -7,12 +7,13 @@
 #include "Camera/CameraComponent.h"
 #include "EnhancedInputComponent.h"
 #include "EnhancedInputSubsystems.h"
+#include "Components/CapsuleComponent.h"
+#include "DrawDebugHelpers.h"
 #include "Engine/World.h"
 
 #if WITH_EDITOR
 #include "GameFramework/PlayerController.h"
 #include "GameFramework/CharacterMovementComponent.h"
-#include "Components/CapsuleComponent.h"
 #include "InputAction.h"
 #include "UObject/ConstructorHelpers.h"
 #include "SceneView.h"
@@ -169,10 +170,53 @@ void APlayerCharacter::Tick(float DeltaTime)
 {
 	Super::Tick(DeltaTime);
 
+	DrawAIRangeDebug();
+
 #if WITH_EDITOR
     UpdateDebugCursorAim();
 #endif
 
+}
+
+float APlayerCharacter::GetDirectChaseRadius() const
+{
+	return FMath::Max(0.0f, DirectChaseRadius);
+}
+
+float APlayerCharacter::GetRoamingOuterRadius() const
+{
+	return FMath::Max(GetDirectChaseRadius(), RoamingOuterRadius);
+}
+
+void APlayerCharacter::DrawAIRangeDebug() const
+{
+	if (!bShowAIRangeDebug)
+	{
+		return;
+	}
+
+	const UCapsuleComponent* Capsule = GetCapsuleComponent();
+	if (!IsValid(GetWorld()) || !IsValid(Capsule))
+	{
+		return;
+	}
+
+	// 바닥과의 Z-fighting을 줄이기 위해 캡슐 바닥보다 약간 위에 수평 원을 그린다.
+	FVector CircleCenter = GetActorLocation();
+	CircleCenter.Z -= Capsule->GetScaledCapsuleHalfHeight();
+	CircleCenter.Z += 5.0f;
+
+	constexpr int32 CircleSegments = 64;
+	constexpr float LineThickness = 3.0f;
+	const FVector CircleAxisX = FVector::ForwardVector;
+	const FVector CircleAxisY = FVector::RightVector;
+
+	DrawDebugCircle(
+		GetWorld(), CircleCenter, GetDirectChaseRadius(), CircleSegments, FColor::Red,
+		false, 0.0f, 0, /*LineThickness*/ 5.0f, CircleAxisX, CircleAxisY, false);
+	DrawDebugCircle(
+		GetWorld(), CircleCenter, GetRoamingOuterRadius(), CircleSegments, FColor::Blue,
+		false, 0.0f, 0, /*LineThickness*/ 5.0f, CircleAxisX, CircleAxisY, false);
 }
 
 // Called to bind functionality to input
