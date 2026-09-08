@@ -32,3 +32,7 @@ void AMannequinAICharacter::SetupPlayerInputComponent(UInputComponent* PlayerInp
 
 }
 
+void AMannequinAICharacter::SetFrozen(bool bFrozen)
+{
+	GetMesh()->bPauseAnims = bFrozen;
+}

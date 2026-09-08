@@ -3,3 +3,14 @@
 
 #include "MannequinAIController.h"
 
+#include "BehaviorTree/BlackboardComponent.h"
+
+void AMannequinAIController::BeginPlay()
+{
+	Super::BeginPlay();
+
+    if (BehaviorTree != nullptr)
+    {
+        RunBehaviorTree(BehaviorTree);
+    }
+}

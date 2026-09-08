@@ -13,5 +13,11 @@ UCLASS()
 class PROJECTPROJECT01_API AMannequinAIController : public AAIController
 {
 	GENERATED_BODY()
-	
+
+public:
+	virtual void BeginPlay() override;
+
+private:
+	UPROPERTY(VisibleAnywhere, Category = "Behavior Tree")	
+	class UBehaviorTree* BehaviorTree;
 };
