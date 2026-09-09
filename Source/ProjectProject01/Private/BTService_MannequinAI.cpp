@@ -87,7 +87,7 @@ bool UBTService_MannequinAI::TryFindRoamingDestination(
 void UBTService_MannequinAI::ClearRoamingState(UBlackboardComponent& Blackboard)
 {
     bHasRoamingDestination = false;
-    bWasInRoamingRange = false;
+    bRoamingCommitted = false;
     bLoggedRoamingQueryFailure = false;
     bIsRoamingWaiting = false;
     NextRoamingQueryTime = 0.0;
@@ -195,7 +195,7 @@ void UBTService_MannequinAI::TickNode(UBehaviorTreeComponent& OwnerComp, uint8* 
         TEXT("foot_r"),
     };
 
-    // 화면에 노출되었는지 확인할 천사의 여러 위치를 저장한다.
+    // 화면에 노출되었는지 확인할 Mannequin 의 여러 위치를 저장한다.
     TArray<FVector> Points;
 
     // 캡슐의 중심 위치를 추가한다.
@@ -226,7 +226,7 @@ void UBTService_MannequinAI::TickNode(UBehaviorTreeComponent& OwnerComp, uint8* 
         }
     }
 
-    // 천사가 화면에 보이는지 여부를 저장한다.
+    // Mannequin 이 화면에 보이는지 여부를 저장한다.
     bool bInScreen = false;
 
     // 현재 화면의 크기를 가져옴
@@ -268,7 +268,7 @@ void UBTService_MannequinAI::TickNode(UBehaviorTreeComponent& OwnerComp, uint8* 
         // 하나라도 화면에 있으면
         if (bThisPointInScreen)
         {
-            // 카메라에서 천사의 지점까지 Line Trace를 했을 때, 어떤 물체에 먼저 부딪혔는지에 대한 정보를 저장한다.
+            // 카메라에서 Mannequin 의 지점까지 Line Trace를 했을 때, 어떤 물체에 먼저 부딪혔는지에 대한 정보를 저장한다.
             FHitResult HitResult;
 
             // Line Trace를 수행할 때 사용할 충돌 설정을 만든다.
@@ -277,11 +277,11 @@ void UBTService_MannequinAI::TickNode(UBehaviorTreeComponent& OwnerComp, uint8* 
             // 카메라가 플레이어 캐릭터의 충돌에 먼저 걸리는 것을 방지한다.
             QueryParams.AddIgnoredActor(PlayerPawn);
 
-            // 현재 월드에 존재하는 모든 우는 천사를 가져온다.
+            // 현재 월드에 존재하는 모든 Mannequin 을 가져온다.
             TArray<AActor*> AllMannequins;
             UGameplayStatics::GetAllActorsOfClass(GetWorld(), AMannequinAICharacter::StaticClass(), AllMannequins);
 
-            // 현재 천사가 아닌 다른 천사들을 Line Trace에서 제외한다.
+            // 현재 Mannequin 이 아닌 다른 Mannequin 들을 Line Trace에서 제외한다.
             for (AActor* OtherMannequin : AllMannequins)
             {
                 if (OtherMannequin != Mannequin)
@@ -299,11 +299,11 @@ void UBTService_MannequinAI::TickNode(UBehaviorTreeComponent& OwnerComp, uint8* 
                 QueryParams
             );
 
-            // Line Trace가 무언가에 부딪혔고, 가장 먼저 부딪힌 대상이 우는 Mannequin 라면 플레이어가 실제로 Mannequin 을 볼 수 있다고 판단한다.
+            // Line Trace가 무언가에 부딪혔고, 가장 먼저 부딪힌 대상이 Mannequin 라면 플레이어가 실제로 Mannequin 을 볼 수 있다고 판단한다.
             // 만약 Mannequin 와 플레이어 사이에 벽이 있다면 Line Trace는 Mannequin 보다 벽에 먼저 부딪히므로 HitResult.GetActor() == MannequinPawn 조건이 false가 된다.
             if (bHit && HitResult.GetActor() == MannequinPawn)
             {
-                // Mannequin 이 화면에 있고, 천사까지의 시야도 막혀 있지 않으므로 플레이어가 Mannequin 을 바라보고 있다고 판단한다.
+                // Mannequin 이 화면에 있고, Mannequin 까지의 시야도 막혀 있지 않으므로 플레이어가 Mannequin 을 바라보고 있다고 판단한다.
                 bInScreen = true;
 
                 // 이미 Mannequin 을 볼 수 있는 지점을 하나 찾았으므로 나머지 지점은 검사할 필요가 없다.
@@ -430,11 +430,11 @@ void UBTService_MannequinAI::TickNode(UBehaviorTreeComponent& OwnerComp, uint8* 
     // 현재 Mannequin 은 Line Trace에서 제외한다.
     QueryParams.AddIgnoredActor(MannequinPawn);
 
-    // 현재 월드에 존재하는 모든 우는 천사를 가져온다.
+    // 현재 월드에 존재하는 모든 Mannequin 을 가져온다.
     TArray<AActor*> AllMannequins;
     UGameplayStatics::GetAllActorsOfClass(GetWorld(), AMannequinAICharacter::StaticClass(), AllMannequins);
 
-    // 현재 천사가 아닌 다른 천사들을 Line Trace에서 제외한다.
+    // 현재 Mannequin 이 아닌 다른 Mannequin 들을 Line Trace에서 제외한다.
     for (AActor* OtherAngel : AllMannequins)
     {
         if (OtherAngel != MannequinPawn)
@@ -467,6 +467,7 @@ void UBTService_MannequinAI::TickNode(UBehaviorTreeComponent& OwnerComp, uint8* 
     {
         Blackboard->ClearValue(TEXT("TargetActor"));
         ClearRoamingState(*Blackboard);
+        bRoamingTriggerArmed = true;
         return;
     }
 
@@ -477,70 +478,140 @@ void UBTService_MannequinAI::TickNode(UBehaviorTreeComponent& OwnerComp, uint8* 
         return;
     }
 
-    Blackboard->ClearValue(TEXT("TargetActor"));
-
     const double CurrentTime = GetWorld()->GetTimeSeconds();
     const double InnerRadiusSquared = FMath::Square(static_cast<double>(DirectChaseRadius));
     const double OuterRadiusSquared = FMath::Square(static_cast<double>(RoamingOuterRadius));
-    const double DestinationDistanceSquared = bHasRoamingDestination
-        ? FVector::DistSquared2D(RoamingDestination, PlayerLocation)
-        : 0.0;
-    const bool bDestinationOutsideRing = bHasRoamingDestination &&
-        (DestinationDistanceSquared <= InnerRadiusSquared || DestinationDistanceSquared > OuterRadiusSquared);
 
-    if (!bWasInRoamingRange || bDestinationOutsideRing)
+    // 한 번 시작한 배회는 주변 마네킹 수가 줄어도 목적지 도착과 휴식 완료까지 유지한다.
+    if (bRoamingCommitted)
     {
-        bHasRoamingDestination = false;
-        bIsRoamingWaiting = false;
-        RoamingResumeTime = 0.0;
-        Blackboard->ClearValue(TEXT("RoamingLocation"));
-    }
+        Blackboard->ClearValue(TEXT("TargetActor"));
 
-    const bool bReachedDestination = bHasRoamingDestination &&
-        FVector::DistSquared2D(MannequinLocation, RoamingDestination) <= FMath::Square(100.0);
-    if (bReachedDestination && !bIsRoamingWaiting)
-    {
-        const float SafeMinWaitTime = FMath::Max(0.0f, MinRoamingWaitTime);
-        const float SafeMaxWaitTime = FMath::Max(SafeMinWaitTime, MaxRoamingWaitTime);
-        bIsRoamingWaiting = true;
-        RoamingResumeTime = CurrentTime + FMath::FRandRange(SafeMinWaitTime, SafeMaxWaitTime);
-    }
-
-    if (bIsRoamingWaiting && CurrentTime >= RoamingResumeTime)
-    {
-        bHasRoamingDestination = false;
-        bIsRoamingWaiting = false;
-        Blackboard->ClearValue(TEXT("RoamingLocation"));
-    }
-
-    if (!bHasRoamingDestination && !bIsRoamingWaiting && CurrentTime >= NextRoamingQueryTime)
-    {
-        bHasRoamingDestination = TryFindRoamingDestination(
-            MannequinLocation,
-            PlayerLocation,
-            DirectChaseRadius,
-            RoamingOuterRadius,
-            *MannequinPawn,
-            RoamingDestination);
-
-        if (bHasRoamingDestination)
+        const double DestinationDistanceSquared = bHasRoamingDestination
+            ? FVector::DistSquared2D(RoamingDestination, PlayerLocation)
+            : 0.0;
+        const bool bDestinationOutsideRing = bHasRoamingDestination &&
+            (DestinationDistanceSquared <= InnerRadiusSquared || DestinationDistanceSquared > OuterRadiusSquared);
+        if (bDestinationOutsideRing)
         {
-            bLoggedRoamingQueryFailure = false;
-            Blackboard->SetValueAsVector(TEXT("RoamingLocation"), RoamingDestination);
-        }
-        else
-        {
-            NextRoamingQueryTime = CurrentTime + 1.0;
+            // 플레이어 이동으로 목적지가 고리 밖이 되면 배회 약속은 유지한 채 목적지만 다시 찾는다.
+            bHasRoamingDestination = false;
+            bIsRoamingWaiting = false;
+            RoamingResumeTime = 0.0;
             Blackboard->ClearValue(TEXT("RoamingLocation"));
-            if (!bLoggedRoamingQueryFailure)
+        }
+
+        const bool bReachedDestination = bHasRoamingDestination &&
+            FVector::DistSquared2D(MannequinLocation, RoamingDestination) <= FMath::Square(100.0);
+        if (bReachedDestination && !bIsRoamingWaiting)
+        {
+            const float SafeMinWaitTime = FMath::Max(0.0f, MinRoamingWaitTime);
+            const float SafeMaxWaitTime = FMath::Max(SafeMinWaitTime, MaxRoamingWaitTime);
+            bIsRoamingWaiting = true;
+            RoamingResumeTime = CurrentTime + FMath::FRandRange(SafeMinWaitTime, SafeMaxWaitTime);
+        }
+
+        if (bIsRoamingWaiting)
+        {
+            if (CurrentTime >= RoamingResumeTime)
             {
-                UE_LOG(LogTemp, Warning,
-                    TEXT("Mannequin roaming destination unavailable for %s: check NavMesh coverage and player range settings."),
-                    *GetNameSafe(MannequinPawn));
-                bLoggedRoamingQueryFailure = true;
+                ClearRoamingState(*Blackboard);
+                Blackboard->SetValueAsObject(TEXT("TargetActor"), PlayerPawn);
+            }
+            return;
+        }
+
+        if (!bHasRoamingDestination && CurrentTime >= NextRoamingQueryTime)
+        {
+            bHasRoamingDestination = TryFindRoamingDestination(
+                MannequinLocation,
+                PlayerLocation,
+                DirectChaseRadius,
+                RoamingOuterRadius,
+                *MannequinPawn,
+                RoamingDestination);
+
+            if (bHasRoamingDestination)
+            {
+                bLoggedRoamingQueryFailure = false;
+                Blackboard->SetValueAsVector(TEXT("RoamingLocation"), RoamingDestination);
+            }
+            else
+            {
+                NextRoamingQueryTime = CurrentTime + 1.0;
+                if (!bLoggedRoamingQueryFailure)
+                {
+                    UE_LOG(LogTemp, Warning,
+                        TEXT("Committed mannequin roaming destination unavailable for %s: check NavMesh coverage and player range settings."),
+                        *GetNameSafe(MannequinPawn));
+                    bLoggedRoamingQueryFailure = true;
+                }
             }
         }
+        return;
     }
 
-    bWasInRoamingRange = true;
+    const float SafeGatherRadius = FMath::Max(0.0f, MannequinGatherRadius);
+    const double GatherRadiusSquared = FMath::Square(static_cast<double>(SafeGatherRadius));
+    int32 NearbyMannequinCount = 0;
+    for (AActor* OtherMannequin : AllMannequins)
+    {
+        if (IsValid(OtherMannequin) &&
+            FVector::DistSquared2D(MannequinLocation, OtherMannequin->GetActorLocation()) <= GatherRadiusSquared)
+        {
+            // 현재 Mannequin 자신도 집결 인원에 포함한다.
+            ++NearbyMannequinCount;
+        }
+    }
+
+    const int32 SafeRequiredCount = FMath::Max(1, RequiredMannequinCount);
+    if (NearbyMannequinCount < SafeRequiredCount)
+    {
+        // 3명 미만이 된 뒤에만 다음 집결 시 배회 1회를 다시 허용한다.
+        bRoamingTriggerArmed = true;
+        Blackboard->ClearValue(TEXT("RoamingLocation"));
+        Blackboard->SetValueAsObject(TEXT("TargetActor"), PlayerPawn);
+        return;
+    }
+
+    if (!bRoamingTriggerArmed)
+    {
+        // 같은 집결 상태에서 배회를 반복하지 않고 플레이어를 추격한다.
+        Blackboard->ClearValue(TEXT("RoamingLocation"));
+        Blackboard->SetValueAsObject(TEXT("TargetActor"), PlayerPawn);
+        return;
+    }
+
+    Blackboard->ClearValue(TEXT("TargetActor"));
+    if (CurrentTime < NextRoamingQueryTime)
+    {
+        return;
+    }
+
+    bHasRoamingDestination = TryFindRoamingDestination(
+        MannequinLocation,
+        PlayerLocation,
+        DirectChaseRadius,
+        RoamingOuterRadius,
+        *MannequinPawn,
+        RoamingDestination);
+    if (bHasRoamingDestination)
+    {
+        bRoamingCommitted = true;
+        bRoamingTriggerArmed = false;
+        bLoggedRoamingQueryFailure = false;
+        Blackboard->SetValueAsVector(TEXT("RoamingLocation"), RoamingDestination);
+    }
+    else
+    {
+        NextRoamingQueryTime = CurrentTime + 1.0;
+        Blackboard->ClearValue(TEXT("RoamingLocation"));
+        if (!bLoggedRoamingQueryFailure)
+        {
+            UE_LOG(LogTemp, Warning,
+                TEXT("Mannequin roaming destination unavailable for %s: check NavMesh coverage and player range settings."),
+                *GetNameSafe(MannequinPawn));
+            bLoggedRoamingQueryFailure = true;
+        }
+    }
 }
